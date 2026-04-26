@@ -21,8 +21,7 @@ class DoanhNghiepController extends ApiController
                 $query->where(function ($q) use ($search) {
                     $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
                         ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%")
-                        ->orWhere('dia_chi', 'like', "%{$search}%")
-                        ->orWhere('nguoi_dai_dien', 'like', "%{$search}%");
+                        ->orWhere('dia_chi', 'like', "%{$search}%");
                 });
             })
             ->when(request('quanHuyen'), function ($query, $quanHuyen) {
@@ -67,6 +66,7 @@ class DoanhNghiepController extends ApiController
     {
         $data = $this->mapCamelToSnake($request->validated());
         $doanhNghiep = DoanhNghiep::create($data);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep),
@@ -80,6 +80,8 @@ class DoanhNghiepController extends ApiController
      */
     public function show(DoanhNghiep $doanhNghiep): JsonResponse
     {
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members']);
+
         return $this->success(new DoanhNghiepResource($doanhNghiep));
     }
 
@@ -90,6 +92,7 @@ class DoanhNghiepController extends ApiController
     {
         $data = $this->mapCamelToSnake($request->validated());
         $doanhNghiep->update($data);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
@@ -122,7 +125,6 @@ class DoanhNghiepController extends ApiController
             'trangThai' => 'trang_thai',
             'dienThoai' => 'dien_thoai',
             'nguoiDaiDien' => 'nguoi_dai_dien',
-            'ngaySinhNguoiDaiDien' => 'ngay_sinh_nguoi_dai_dien',
             'chuSoHuu' => 'chu_so_huu',
             'nganhNgheKDChinh' => 'nganh_nghe_kd_chinh',
             'nganhNgheKD' => 'nganh_nghe_kd',

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class DoanhNghiep extends Model
@@ -23,7 +24,6 @@ class DoanhNghiep extends Model
         'trang_thai',
         'dien_thoai',
         'nguoi_dai_dien',
-        'ngay_sinh_nguoi_dai_dien',
         'chu_so_huu',
         'nganh_nghe_kd_chinh',
         'nganh_nghe_kd',
@@ -50,5 +50,21 @@ class DoanhNghiep extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(Member::class, 'member_companies');
+    }
+
+    /**
+     * Chu so huu (owner) belongs to a Member.
+     */
+    public function chuSoHuu(): BelongsTo
+    {
+        return $this->belongsTo(Member::class, 'chu_so_huu');
+    }
+
+    /**
+     * Nguoi dai dien (legal representative) belongs to a Member.
+     */
+    public function nguoiDaiDien(): BelongsTo
+    {
+        return $this->belongsTo(Member::class, 'nguoi_dai_dien');
     }
 }
