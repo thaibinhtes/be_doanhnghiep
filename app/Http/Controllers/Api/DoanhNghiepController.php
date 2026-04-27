@@ -6,6 +6,7 @@ use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
 use App\Http\Resources\DoanhNghiepResource;
 use App\Models\DoanhNghiep;
+use App\Models\Member;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -17,6 +18,7 @@ class DoanhNghiepController extends ApiController
     public function index(): AnonymousResourceCollection
     {
         $query = DoanhNghiep::query()
+            ->with(['nguoiDaiDien', 'members', 'chuSoHuu'])
             ->when(request('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
@@ -64,9 +66,19 @@ class DoanhNghiepController extends ApiController
      */
     public function store(StoreDoanhNghiepRequest $request): JsonResponse
     {
-        $data = $this->mapCamelToSnake($request->validated());
+        $validated = $request->validated();
+        $danhSachTV = $validated['danhSachThanhVienGopVon'] ?? [];
+        unset($validated['danhSachThanhVienGopVon']);
+
+        $data = $this->mapCamelToSnake($validated);
         $doanhNghiep = DoanhNghiep::create($data);
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien']);
+
+        // Attach members with pivot data
+        if (!empty($danhSachTV)) {
+            $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
+        }
+
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members', 'memberCompanies.member']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep),
@@ -80,7 +92,7 @@ class DoanhNghiepController extends ApiController
      */
     public function show(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members', 'memberCompanies.member']);
 
         return $this->success(new DoanhNghiepResource($doanhNghiep));
     }
@@ -88,15 +100,34 @@ class DoanhNghiepController extends ApiController
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateDoanhNghiepRequest $request, DoanhNghiep $doanhNghiep): JsonResponse
+    public function update(UpdateDoanhNghiepRequest $request, $id): JsonResponse
     {
-        $data = $this->mapCamelToSnake($request->validated());
-        $doanhNghiep->update($data);
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien']);
+        $validated = $request->validated();
+        $danhSachTV = $validated['danhSachThanhVienGopVon'] ?? null;
+        unset($validated['danhSachThanhVienGopVon']);
+        $doanhNghiep = DoanhNghiep::find($id);
+
+        if (!$doanhNghiep) {
+            return $this->error("Not found!");
+        }
+
+        $data = $this->mapCamelToSnake($validated);
+
+        if (!empty($data)) {
+            $doanhNghiep->update($data);
+            $doanhNghiep->save();
+        }
+
+        if ($danhSachTV !== null) {
+            $doanhNghiep->memberCompanies()->delete();
+            $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
+        }
+
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members', 'memberCompanies.member']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
-            'Doanh nghiệp updated successfully'
+            'Doanh nghiệp updated successfully!!'
         );
     }
 
@@ -108,6 +139,33 @@ class DoanhNghiepController extends ApiController
         $doanhNghiep->delete();
 
         return $this->success(null, 'Doanh nghiệp deleted successfully');
+    }
+
+    /**
+     * Sync members to company with pivot data.
+     */
+    private function syncMembersToCompany(DoanhNghiep $doanhNghiep, array $danhSachTV): void
+    {
+        foreach ($danhSachTV as $item) {
+            $memberId = is_array($item) ? ($item['memberId'] ?? null) : $item;
+
+            if (!$memberId) {
+                continue;
+            }
+
+            $member = Member::find($memberId);
+            if (!$member) {
+                continue;
+            }
+
+            $pivotData = [
+                'date_join' => $item['dateJoin'] ?? $member->date_join,
+                'position' => $item['position'] ?? $member->position,
+                'investment_amount' => $item['investmentAmount'] ?? $member->investment_amount,
+            ];
+
+            $doanhNghiep->members()->attach($memberId, $pivotData);
+        }
     }
 
     /**
@@ -124,16 +182,14 @@ class DoanhNghiepController extends ApiController
             'vonDieuLe' => 'von_dieu_le',
             'trangThai' => 'trang_thai',
             'dienThoai' => 'dien_thoai',
-            'nguoiDaiDien' => 'nguoi_dai_dien',
-            'chuSoHuu' => 'chu_so_huu',
+            'nguoiDaiDienID' => 'nguoi_dai_dien_id',
+            'chuSoHuuID' => 'chu_so_huu_id',
             'nganhNgheKDChinh' => 'nganh_nghe_kd_chinh',
             'nganhNgheKD' => 'nganh_nghe_kd',
             'ngayCap' => 'ngay_cap',
             'ngayDangKyThayDoi' => 'ngay_dang_ky_thay_doi',
             'loaiHinhDN' => 'loai_hinh_dn',
             'soLuongLaoDong' => 'so_luong_lao_dong',
-            'dsThanhVienGopVon' => 'ds_thanh_vien_gop_von',
-            'dsCoDong' => 'ds_co_dong',
             'loaiDN' => 'loai_dn',
         ];
 

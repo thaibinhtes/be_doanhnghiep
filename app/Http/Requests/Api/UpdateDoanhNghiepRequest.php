@@ -35,6 +35,8 @@ class UpdateDoanhNghiepRequest extends FormRequest
             'trangThai' => ['nullable', 'string', 'max:100'],
             'dienThoai' => ['nullable', 'string', 'max:50'],
             'nguoiDaiDien' => ['nullable', 'integer', 'exists:members,id'],
+            'nguoiDaiDienID' => ['nullable', 'integer'],
+            'chuSoHuuID' => ['nullable', 'integer'],
             'chuSoHuu' => ['nullable', 'integer', 'exists:members,id'],
             'nganhNgheKDChinh' => ['nullable', 'string', 'max:255'],
             'nganhNgheKD' => ['nullable', 'string'],
@@ -42,9 +44,9 @@ class UpdateDoanhNghiepRequest extends FormRequest
             'ngayDangKyThayDoi' => ['nullable', 'string', 'max:50'],
             'loaiHinhDN' => ['nullable', 'string', 'max:100'],
             'soLuongLaoDong' => ['nullable', 'integer', 'min:0'],
-            'dsThanhVienGopVon' => ['nullable', 'string'],
-            'dsCoDong' => ['nullable', 'string'],
             'loaiDN' => ['nullable', 'string', 'max:100'],
+            'danhSachThanhVienGopVon' => ['nullable', 'array'],
+            'danhSachThanhVienGopVon.*' => ['integer', 'exists:members,id'],
         ];
     }
 }

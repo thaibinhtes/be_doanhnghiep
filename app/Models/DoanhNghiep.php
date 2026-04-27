@@ -23,16 +23,14 @@ class DoanhNghiep extends Model
         'von_dieu_le',
         'trang_thai',
         'dien_thoai',
-        'nguoi_dai_dien',
-        'chu_so_huu',
+        'nguoi_dai_dien_id',
+        'chu_so_huu_id',
         'nganh_nghe_kd_chinh',
         'nganh_nghe_kd',
         'ngay_cap',
         'ngay_dang_ky_thay_doi',
         'loai_hinh_dn',
         'so_luong_lao_dong',
-        'ds_thanh_vien_gop_von',
-        'ds_co_dong',
         'loai_dn',
     ];
 
@@ -43,13 +41,22 @@ class DoanhNghiep extends Model
             'so_luong_lao_dong' => 'integer',
         ];
     }
-
     /**
-     * DoanhNghiep belongs to many Members.
+     * DoanhNghiep belongs to many Members with pivot data.
      */
     public function members(): BelongsToMany
     {
-        return $this->belongsToMany(Member::class, 'member_companies');
+        return $this->belongsToMany(Member::class, 'member_companies')
+            ->withPivot('date_join', 'position', 'investment_amount')
+            ->withTimestamps();
+    }
+
+    /**
+     * Member companies as a hasMany for direct access.
+     */
+    public function memberCompanies()
+    {
+        return $this->hasMany(MemberCompany::class, 'doanh_nghiep_id');
     }
 
     /**
@@ -57,7 +64,7 @@ class DoanhNghiep extends Model
      */
     public function chuSoHuu(): BelongsTo
     {
-        return $this->belongsTo(Member::class, 'chu_so_huu');
+        return $this->belongsTo(Member::class, 'chu_so_huu_id');
     }
 
     /**
@@ -65,6 +72,6 @@ class DoanhNghiep extends Model
      */
     public function nguoiDaiDien(): BelongsTo
     {
-        return $this->belongsTo(Member::class, 'nguoi_dai_dien');
+        return $this->belongsTo(Member::class, 'nguoi_dai_dien_id');
     }
 }

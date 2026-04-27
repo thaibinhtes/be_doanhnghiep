@@ -2,18 +2,105 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Requests\Api\StoreMemberCompanyRequest;
+use App\Http\Requests\Api\UpdateMemberCompanyRequest;
 use App\Http\Resources\DoanhNghiepResource;
+use App\Http\Resources\MemberCompanyResource;
 use App\Http\Resources\MemberResource;
 use App\Models\DoanhNghiep;
 use App\Models\Member;
+use App\Models\MemberCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class MemberCompanyController extends ApiController
 {
     /**
-     * Attach companies to a member.
+     * Display a listing of the resource.
+     */
+    public function index(): AnonymousResourceCollection
+    {
+        $query = MemberCompany::query()
+            ->with(['member', 'doanhNghiep'])
+            ->when(request('memberId'), function ($query, $memberId) {
+                $query->where('member_id', $memberId);
+            })
+            ->when(request('doanhNghiepId'), function ($query, $doanhNghiepId) {
+                $query->where('doanh_nghiep_id', $doanhNghiepId);
+            })
+            ->orderBy('created_at', 'desc');
+
+        $perPage = request('perPage', 15);
+        $memberCompanies = $query->paginate($perPage);
+
+        return MemberCompanyResource::collection($memberCompanies);
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(StoreMemberCompanyRequest $request): JsonResponse
+    {
+        $data = [
+            'member_id' => $request->input('memberId'),
+            'doanh_nghiep_id' => $request->input('doanhNghiepId'),
+        ];
+
+        $memberCompany = MemberCompany::create($data);
+        $memberCompany->load(['member', 'doanhNghiep']);
+
+        return $this->success(
+            new MemberCompanyResource($memberCompany),
+            'Member-Company association created successfully',
+            201
+        );
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(MemberCompany $memberCompany): JsonResponse
+    {
+        $memberCompany->load(['member', 'doanhNghiep']);
+
+        return $this->success(new MemberCompanyResource($memberCompany));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(UpdateMemberCompanyRequest $request, MemberCompany $memberCompany): JsonResponse
+    {
+        $data = [];
+        if ($request->has('memberId')) {
+            $data['member_id'] = $request->input('memberId');
+        }
+        if ($request->has('doanhNghiepId')) {
+            $data['doanh_nghiep_id'] = $request->input('doanhNghiepId');
+        }
+
+        $memberCompany->update($data);
+        $memberCompany->load(['member', 'doanhNghiep']);
+
+        return $this->success(
+            new MemberCompanyResource($memberCompany->fresh()),
+            'Member-Company association updated successfully'
+        );
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(MemberCompany $memberCompany): JsonResponse
+    {
+        $memberCompany->delete();
+
+        return $this->success(null, 'Member-Company association deleted successfully');
+    }
+
+    /**
+     * Attach companies to a member (bulk).
      */
     public function attachCompanies(Request $request, Member $member): JsonResponse
     {
@@ -32,7 +119,7 @@ class MemberCompanyController extends ApiController
     }
 
     /**
-     * Detach companies from a member.
+     * Detach companies from a member (bulk).
      */
     public function detachCompanies(Request $request, Member $member): JsonResponse
     {
@@ -51,7 +138,7 @@ class MemberCompanyController extends ApiController
     }
 
     /**
-     * Sync companies for a member.
+     * Sync companies for a member (bulk).
      */
     public function syncCompanies(Request $request, Member $member): JsonResponse
     {
@@ -70,7 +157,7 @@ class MemberCompanyController extends ApiController
     }
 
     /**
-     * Attach members to a company.
+     * Attach members to a company (bulk).
      */
     public function attachMembers(Request $request, DoanhNghiep $doanhNghiep): JsonResponse
     {
@@ -89,7 +176,7 @@ class MemberCompanyController extends ApiController
     }
 
     /**
-     * Detach members from a company.
+     * Detach members from a company (bulk).
      */
     public function detachMembers(Request $request, DoanhNghiep $doanhNghiep): JsonResponse
     {
@@ -108,7 +195,7 @@ class MemberCompanyController extends ApiController
     }
 
     /**
-     * Sync members for a company.
+     * Sync members for a company (bulk).
      */
     public function syncMembers(Request $request, DoanhNghiep $doanhNghiep): JsonResponse
     {

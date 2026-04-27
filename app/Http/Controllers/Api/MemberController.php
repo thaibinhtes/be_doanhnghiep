@@ -14,13 +14,9 @@ class MemberController extends ApiController
     /**
      * Display a listing of the resource.
      */
-    public function index(): AnonymousResourceCollection
+    public function index()
     {
         $query = Member::query()
-            ->with('doanhNghieps')
-            ->when(request('search'), function ($query, $search) {
-                $query->where('full_name', 'like', "%{$search}%");
-            })
             ->when(request('cccd'), function ($query, $cccd) {
                 $query->where('cccd', $cccd);
             })
@@ -30,12 +26,9 @@ class MemberController extends ApiController
             ->when(request('status') !== null, function ($query) {
                 $query->where('status', request('status'));
             })
-            ->when(request('position'), function ($query, $position) {
-                $query->where('position', 'like', "%{$position}%");
-            })
             ->when(request('sortBy'), function ($query, $sortBy) {
                 $direction = request('sortDirection', 'asc');
-                $allowedSorts = ['full_name', 'date_join', 'status', 'position', 'investment_amount', 'cccd', 'created_at'];
+                $allowedSorts = ['full_name', 'status', 'cccd', 'created_at'];
                 if (in_array($sortBy, $allowedSorts)) {
                     $query->orderBy($sortBy, $direction);
                 }
@@ -56,7 +49,6 @@ class MemberController extends ApiController
     {
         $data = $this->mapCamelToSnake($request->validated());
         $member = Member::create($data);
-        $member->load('doanhNghieps');
 
         return $this->success(
             new MemberResource($member),
@@ -107,8 +99,6 @@ class MemberController extends ApiController
     {
         $mapping = [
             'fullName' => 'full_name',
-            'dateJoin' => 'date_join',
-            'investmentAmount' => 'investment_amount',
         ];
 
         $result = [];

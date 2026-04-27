@@ -10,8 +10,9 @@ Route::get('/health', [HealthController::class, 'check']);
 
 Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
 Route::apiResource('members', MemberController::class);
+Route::apiResource('member-companies', MemberCompanyController::class);
 
-// Member <> Company pivot management
+// Member <> Company pivot management (bulk operations)
 Route::post('/members/{member}/companies/attach', [MemberCompanyController::class, 'attachCompanies']);
 Route::post('/members/{member}/companies/detach', [MemberCompanyController::class, 'detachCompanies']);
 Route::post('/members/{member}/companies/sync', [MemberCompanyController::class, 'syncCompanies']);

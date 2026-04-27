@@ -17,10 +17,7 @@ return new class extends Migration
             $table->string('full_name');
             $table->string('birthday')->nullable();
             $table->string('gender')->nullable();
-            $table->string('date_join')->nullable();
             $table->boolean('status')->default(true);
-            $table->string('position')->nullable();
-            $table->decimal('investment_amount', 20, 2)->nullable();
             $table->timestamps();
 
             $table->index('full_name');

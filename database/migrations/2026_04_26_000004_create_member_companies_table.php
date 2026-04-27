@@ -16,6 +16,9 @@ return new class extends Migration
         
             $table->unsignedBigInteger('member_id');
             $table->unsignedBigInteger('doanh_nghiep_id');
+            $table->string('date_join')->nullable();
+            $table->string('position')->nullable();
+            $table->decimal('investment_amount', 20, 2)->nullable();
         
             $table->timestamps();
         

@@ -20,13 +20,9 @@ class MemberResource extends JsonResource
             'fullName' => $this->full_name,
             'birthday' => $this->birthday,
             'gender' => $this->gender,
-            'dateJoin' => $this->date_join,
             'status' => $this->status,
-            'position' => $this->position,
-            'investmentAmount' => $this->investment_amount,
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
-            'doanhNghieps' => $this->whenLoaded('doanhNghieps', fn () => DoanhNghiepResource::collection($this->doanhNghieps)),
         ];
     }
 }
