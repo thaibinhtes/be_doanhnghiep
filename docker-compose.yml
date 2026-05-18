@@ -20,8 +20,8 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_DB: mobi_companies
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secret
+      POSTGRES_USER: mobi_companies
+      POSTGRES_PASSWORD: mobi_companies@2026
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
