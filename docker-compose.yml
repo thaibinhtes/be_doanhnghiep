@@ -1,20 +1,9 @@
 services:
   app:
     build: .
+    restart: unless-stopped
     ports:
       - "8000:8000"
-    command: >
-      sh -c "test -f .env || cp .env.example .env &&
-      grep -qE '^APP_KEY=base64:' .env || php artisan key:generate --force &&
-      sed -i 's|^DB_HOST=.*|DB_HOST=postgres|' .env &&
-      sed -i 's|^DB_USERNAME=.*|DB_USERNAME=mobi_companies|' .env &&
-      sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=mobi_companies@2026|' .env &&
-      sed -i 's|^DB_DATABASE=.*|DB_DATABASE=mobi_companies|' .env &&
-      composer install --no-interaction --prefer-dist &&
-      rm -f bootstrap/cache/config.php &&
-      php artisan config:clear &&
-      php artisan migrate --force &&
-      php artisan serve --host=0.0.0.0 --port=8000"
     volumes:
       - .:/var/www
     depends_on:

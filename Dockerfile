@@ -37,6 +37,9 @@ RUN chown -R www-data:www-data /var/www \
 # PHP-FPM config
 RUN sed -i 's/listen = .*/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf
 
-EXPOSE 9000
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-CMD ["php-fpm"]
+EXPOSE 8000
+
+CMD ["/usr/local/bin/entrypoint.sh"]
