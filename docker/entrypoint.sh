@@ -11,10 +11,8 @@ if ! grep -qE '^APP_KEY=base64:' .env; then
   php artisan key:generate --force
 fi
 
+# Inside Docker, DB host must be the compose service name (not 127.0.0.1)
 sed -i 's|^DB_HOST=.*|DB_HOST=postgres|' .env
-sed -i 's|^DB_USERNAME=.*|DB_USERNAME=mobi_companies|' .env
-sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=mobi_companies@2026|' .env
-sed -i 's|^DB_DATABASE=.*|DB_DATABASE=mobi_companies|' .env
 
 composer install --no-interaction --prefer-dist --no-progress
 
