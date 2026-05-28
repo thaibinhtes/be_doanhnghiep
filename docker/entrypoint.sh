@@ -3,6 +3,8 @@ set -e
 
 cd /var/www
 
+composer install --no-interaction --prefer-dist --no-progress
+
 if [ ! -f .env ]; then
   cp .env.example .env
 fi
@@ -13,8 +15,6 @@ fi
 
 mkdir -p database
 touch database/database.sqlite
-
-composer install --no-interaction --prefer-dist --no-progress
 
 rm -f bootstrap/cache/config.php
 php artisan config:clear
