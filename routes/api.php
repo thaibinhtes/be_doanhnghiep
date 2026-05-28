@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health', [HealthController::class, 'check']);
 
 Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
+Route::patch('/doanh-nghiep/{doanhNghiep}/dinh-danh', [DoanhNghiepController::class, 'updateDinhDanh']);
 Route::apiResource('members', MemberController::class);
 Route::apiResource('member-companies', MemberCompanyController::class);
 

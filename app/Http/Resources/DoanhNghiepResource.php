@@ -24,6 +24,8 @@ class DoanhNghiepResource extends JsonResource
             'phuongXa' => $this->phuong_xa,
             'vonDieuLe' => $this->von_dieu_le,
             'trangThai' => $this->trang_thai,
+            'daCapNhatDinhDanh' => (bool) $this->da_cap_nhat_dinh_danh,
+            'trangThaiDinhDanh' => $this->da_cap_nhat_dinh_danh ? 'Đã cập nhật định danh' : 'Chưa cập nhật định danh',
             'dienThoai' => $this->dien_thoai,
             'nguoiDaiDienTen' => $this->nguoi_dai_dien_ten,
             'ngaySinhNguoiDaiDien' => $this->ngay_sinh_nguoi_dai_dien,

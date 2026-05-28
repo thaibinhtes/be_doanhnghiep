@@ -22,6 +22,7 @@ class DoanhNghiep extends Model
         'phuong_xa',
         'von_dieu_le',
         'trang_thai',
+        'da_cap_nhat_dinh_danh',
         'dien_thoai',
         'nguoi_dai_dien_ten',
         'ngay_sinh_nguoi_dai_dien',
@@ -43,6 +44,7 @@ class DoanhNghiep extends Model
         return [
             'tt' => 'integer',
             'so_luong_lao_dong' => 'integer',
+            'da_cap_nhat_dinh_danh' => 'boolean',
         ];
     }
     /**

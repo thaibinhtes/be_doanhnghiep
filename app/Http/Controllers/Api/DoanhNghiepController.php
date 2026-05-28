@@ -12,6 +12,9 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DoanhNghiepController extends ApiController
 {
+    private const DINH_DANH_LABEL_UPDATED = 'Đã cập nhật định danh';
+    private const DINH_DANH_LABEL_PENDING = 'Chưa cập nhật định danh';
+
     /**
      * Display a listing of the resource.
      */
@@ -141,6 +144,26 @@ class DoanhNghiepController extends ApiController
     }
 
     /**
+     * Update identity verification status of a company.
+     */
+    public function updateDinhDanh(DoanhNghiep $doanhNghiep): JsonResponse
+    {
+        $validated = request()->validate([
+            'daCapNhatDinhDanh' => ['required', 'boolean'],
+        ]);
+
+        $doanhNghiep->update([
+            'da_cap_nhat_dinh_danh' => $validated['daCapNhatDinhDanh'],
+        ]);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
+
+        return $this->success(
+            new DoanhNghiepResource($doanhNghiep->fresh()),
+            $validated['daCapNhatDinhDanh'] ? self::DINH_DANH_LABEL_UPDATED : self::DINH_DANH_LABEL_PENDING
+        );
+    }
+
+    /**
      * Sync members to company with pivot data from text input.
      */
     private function syncMembersToCompany(DoanhNghiep $doanhNghiep, array $danhSachTV): void
@@ -186,6 +209,7 @@ class DoanhNghiepController extends ApiController
             'phuongXa' => 'phuong_xa',
             'vonDieuLe' => 'von_dieu_le',
             'trangThai' => 'trang_thai',
+            'daCapNhatDinhDanh' => 'da_cap_nhat_dinh_danh',
             'dienThoai' => 'dien_thoai',
             'nguoiDaiDienTen' => 'nguoi_dai_dien_ten',
             'ngaySinhNguoiDaiDien' => 'ngay_sinh_nguoi_dai_dien',

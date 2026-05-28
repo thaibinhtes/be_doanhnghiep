@@ -33,6 +33,7 @@ class UpdateDoanhNghiepRequest extends FormRequest
             'phuongXa' => ['nullable', 'string', 'max:100'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
             'trangThai' => ['nullable', 'string', 'max:100'],
+            'daCapNhatDinhDanh' => ['nullable', 'boolean'],
             'dienThoai' => ['nullable', 'string', 'max:50'],
             'nguoiDaiDienTen' => ['nullable', 'string', 'max:255'],
             'ngaySinhNguoiDaiDien' => ['nullable', 'string', 'max:50'],
