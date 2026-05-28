@@ -13,26 +13,32 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create 20 members
         $members = Member::factory(20)->create();
 
-        // Create 10 companies with random owners and representatives
         $companies = DoanhNghiep::factory(10)->make()->each(function ($company) use ($members) {
             $owner = $members->random();
             $rep = $members->random();
             $company->chu_so_huu_id = $owner->id;
+            $company->chu_so_huu_ten = $owner->full_name;
             $company->nguoi_dai_dien_id = $rep->id;
+            $company->nguoi_dai_dien_ten = $rep->full_name;
+            $company->ngay_sinh_nguoi_dai_dien = $rep->birthday;
             $company->save();
         });
 
-        // Attach random members to each company with pivot data
-        $companies->each(function ($company) use ($members) {
+        $positions = [
+            'Giám đốc', 'Phó giám đốc', 'Kế toán trưởng',
+            'Trưởng phòng', 'Nhân viên', 'Chuyên viên',
+        ];
+        $amounts = [100000000, 200000000, 500000000, 1000000000];
+
+        $companies->each(function ($company) use ($members, $positions, $amounts) {
             $selectedMembers = $members->random(rand(1, 5));
             foreach ($selectedMembers as $member) {
                 $company->members()->attach($member->id, [
-                    'date_join' => $member->date_join,
-                    'position' => $member->position,
-                    'investment_amount' => $member->investment_amount,
+                    'date_join' => fake()->date('d/m/Y'),
+                    'position' => fake()->randomElement($positions),
+                    'investment_amount' => fake()->randomElement($amounts),
                 ]);
             }
         });

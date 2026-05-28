@@ -25,6 +25,9 @@ class DoanhNghiepResource extends JsonResource
             'vonDieuLe' => $this->von_dieu_le,
             'trangThai' => $this->trang_thai,
             'dienThoai' => $this->dien_thoai,
+            'nguoiDaiDienTen' => $this->nguoi_dai_dien_ten,
+            'ngaySinhNguoiDaiDien' => $this->ngay_sinh_nguoi_dai_dien,
+            'chuSoHuuTen' => $this->chu_so_huu_ten,
             'nguoiDaiDien' => $this->whenLoaded('nguoiDaiDien', fn () => new MemberResource($this->nguoiDaiDien)),
             'chuSoHuu' => $this->whenLoaded('chuSoHuu', fn () => new MemberResource($this->chuSoHuu)),
             'nganhNgheKDChinh' => $this->nganh_nghe_kd_chinh,
@@ -34,15 +37,25 @@ class DoanhNghiepResource extends JsonResource
             'loaiHinhDN' => $this->loai_hinh_dn,
             'soLuongLaoDong' => $this->so_luong_lao_dong,
             'loaiDN' => $this->loai_dn,
+            'dsCoDong' => $this->ds_co_dong,
+            'dsThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () =>
+                $this->memberCompanies->map(fn ($mc) => [
+                    'id' => $mc->id,
+                    'memberId' => $mc->member_id,
+                    'fullName' => $mc->member?->full_name ?? '',
+                    'dateJoin' => $mc->date_join,
+                    'position' => $mc->position,
+                    'investmentAmount' => $mc->investment_amount,
+                ])
+            ),
             'danhSachThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () =>
                 $this->memberCompanies->map(fn ($mc) => [
                     'id' => $mc->id,
                     'memberId' => $mc->member_id,
-                    'doanhNghiepId' => $mc->doanh_nghiep_id,
+                    'fullName' => $mc->member?->full_name ?? '',
                     'dateJoin' => $mc->date_join,
                     'position' => $mc->position,
                     'investmentAmount' => $mc->investment_amount,
-                    'member' => $mc->member ? new MemberResource($mc->member) : null,
                 ])
             ),
             'createdAt' => $this->created_at?->toIso8601String(),

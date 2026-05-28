@@ -18,7 +18,7 @@ class DoanhNghiepController extends ApiController
     public function index(): AnonymousResourceCollection
     {
         $query = DoanhNghiep::query()
-            ->with(['nguoiDaiDien', 'members', 'chuSoHuu'])
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member'])
             ->when(request('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
@@ -73,12 +73,11 @@ class DoanhNghiepController extends ApiController
         $data = $this->mapCamelToSnake($validated);
         $doanhNghiep = DoanhNghiep::create($data);
 
-        // Attach members with pivot data
         if (!empty($danhSachTV)) {
             $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
         }
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members', 'memberCompanies.member']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep),
@@ -92,7 +91,7 @@ class DoanhNghiepController extends ApiController
      */
     public function show(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members', 'memberCompanies.member']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
 
         return $this->success(new DoanhNghiepResource($doanhNghiep));
     }
@@ -123,7 +122,7 @@ class DoanhNghiepController extends ApiController
             $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
         }
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'members', 'memberCompanies.member']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
@@ -142,29 +141,35 @@ class DoanhNghiepController extends ApiController
     }
 
     /**
-     * Sync members to company with pivot data.
+     * Sync members to company with pivot data from text input.
      */
     private function syncMembersToCompany(DoanhNghiep $doanhNghiep, array $danhSachTV): void
     {
         foreach ($danhSachTV as $item) {
-            $memberId = is_array($item) ? ($item['memberId'] ?? null) : $item;
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $fullName = trim($item['fullName'] ?? '');
+            if ($fullName === '') {
+                continue;
+            }
+
+            $memberId = $item['memberId'] ?? null;
 
             if (!$memberId) {
-                continue;
+                $member = Member::firstOrCreate(
+                    ['full_name' => $fullName],
+                    ['cccd' => null, 'status' => true]
+                );
+                $memberId = $member->id;
             }
 
-            $member = Member::find($memberId);
-            if (!$member) {
-                continue;
-            }
-
-            $pivotData = [
-                'date_join' => $item['dateJoin'] ?? $member->date_join,
-                'position' => $item['position'] ?? $member->position,
-                'investment_amount' => $item['investmentAmount'] ?? $member->investment_amount,
-            ];
-
-            $doanhNghiep->members()->attach($memberId, $pivotData);
+            $doanhNghiep->members()->attach($memberId, [
+                'date_join' => $item['dateJoin'] ?? null,
+                'position' => $item['position'] ?? null,
+                'investment_amount' => $item['investmentAmount'] ?? null,
+            ]);
         }
     }
 
@@ -182,6 +187,9 @@ class DoanhNghiepController extends ApiController
             'vonDieuLe' => 'von_dieu_le',
             'trangThai' => 'trang_thai',
             'dienThoai' => 'dien_thoai',
+            'nguoiDaiDienTen' => 'nguoi_dai_dien_ten',
+            'ngaySinhNguoiDaiDien' => 'ngay_sinh_nguoi_dai_dien',
+            'chuSoHuuTen' => 'chu_so_huu_ten',
             'nguoiDaiDienID' => 'nguoi_dai_dien_id',
             'chuSoHuuID' => 'chu_so_huu_id',
             'nganhNgheKDChinh' => 'nganh_nghe_kd_chinh',
@@ -191,6 +199,7 @@ class DoanhNghiepController extends ApiController
             'loaiHinhDN' => 'loai_hinh_dn',
             'soLuongLaoDong' => 'so_luong_lao_dong',
             'loaiDN' => 'loai_dn',
+            'dsCoDong' => 'ds_co_dong',
         ];
 
         $result = [];

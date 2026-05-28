@@ -11,8 +11,8 @@ if ! grep -qE '^APP_KEY=base64:' .env; then
   php artisan key:generate --force
 fi
 
-# Inside Docker, DB host must be the compose service name (not 127.0.0.1)
-sed -i 's|^DB_HOST=.*|DB_HOST=postgres|' .env
+mkdir -p database
+touch database/database.sqlite
 
 composer install --no-interaction --prefer-dist --no-progress
 
