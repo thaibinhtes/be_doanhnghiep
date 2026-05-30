@@ -20,6 +20,8 @@ class DoanhNghiepResource extends JsonResource
             'maSoDoanhNghiep' => $this->ma_so_doanh_nghiep,
             'tenDoanhNghiep' => $this->ten_doanh_nghiep,
             'diaChi' => $this->dia_chi,
+            'long' => $this->long !== null ? (float) $this->long : null,
+            'lat' => $this->lat !== null ? (float) $this->lat : null,
             'quanHuyen' => $this->quan_huyen,
             'phuongXa' => $this->phuong_xa,
             'vonDieuLe' => $this->von_dieu_le,

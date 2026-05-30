@@ -44,6 +44,22 @@ class DoanhNghiepController extends ApiController
             ->when(request('loaiDN'), function ($query, $loaiDN) {
                 $query->where('loai_dn', $loaiDN);
             })
+            ->when(request()->has('daCapNhatDinhDanh'), function ($query) {
+                $daCapNhatDinhDanh = filter_var(request('daCapNhatDinhDanh'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($daCapNhatDinhDanh !== null) {
+                    $query->where('da_cap_nhat_dinh_danh', $daCapNhatDinhDanh);
+                }
+            })
+            ->when(request()->has('hasCoordinates'), function ($query) {
+                $hasCoordinates = filter_var(request('hasCoordinates'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($hasCoordinates === true) {
+                    $query->whereNotNull('long')->whereNotNull('lat');
+                } elseif ($hasCoordinates === false) {
+                    $query->where(function ($q) {
+                        $q->whereNull('long')->orWhereNull('lat');
+                    });
+                }
+            })
             ->when(request('sortBy'), function ($query, $sortBy) {
                 $direction = request('sortDirection', 'asc');
                 $allowedSorts = [
@@ -205,6 +221,8 @@ class DoanhNghiepController extends ApiController
             'maSoDoanhNghiep' => 'ma_so_doanh_nghiep',
             'tenDoanhNghiep' => 'ten_doanh_nghiep',
             'diaChi' => 'dia_chi',
+            'long' => 'long',
+            'lat' => 'lat',
             'quanHuyen' => 'quan_huyen',
             'phuongXa' => 'phuong_xa',
             'vonDieuLe' => 'von_dieu_le',

@@ -18,6 +18,8 @@ class DoanhNghiep extends Model
         'ma_so_doanh_nghiep',
         'ten_doanh_nghiep',
         'dia_chi',
+        'long',
+        'lat',
         'quan_huyen',
         'phuong_xa',
         'von_dieu_le',
@@ -45,6 +47,8 @@ class DoanhNghiep extends Model
             'tt' => 'integer',
             'so_luong_lao_dong' => 'integer',
             'da_cap_nhat_dinh_danh' => 'boolean',
+            'long' => 'float',
+            'lat' => 'float',
         ];
     }
     /**

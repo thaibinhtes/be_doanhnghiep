@@ -26,6 +26,8 @@ class StoreDoanhNghiepRequest extends FormRequest
             'maSoDoanhNghiep' => ['nullable', 'string', 'max:50', 'unique:doanh_nghieps,ma_so_doanh_nghiep'],
             'tenDoanhNghiep' => ['required', 'string', 'max:255'],
             'diaChi' => ['nullable', 'string'],
+            'long' => ['nullable', 'numeric', 'between:-180,180'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'quanHuyen' => ['nullable', 'string', 'max:100'],
             'phuongXa' => ['nullable', 'string', 'max:100'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],

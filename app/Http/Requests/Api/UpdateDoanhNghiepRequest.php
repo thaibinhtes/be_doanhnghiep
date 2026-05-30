@@ -29,6 +29,8 @@ class UpdateDoanhNghiepRequest extends FormRequest
             'maSoDoanhNghiep' => ['nullable', 'string', 'max:50', Rule::unique('doanh_nghieps', 'ma_so_doanh_nghiep')->ignore($id)],
             'tenDoanhNghiep' => ['sometimes', 'required', 'string', 'max:255'],
             'diaChi' => ['nullable', 'string'],
+            'long' => ['nullable', 'numeric', 'between:-180,180'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'quanHuyen' => ['nullable', 'string', 'max:100'],
             'phuongXa' => ['nullable', 'string', 'max:100'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
