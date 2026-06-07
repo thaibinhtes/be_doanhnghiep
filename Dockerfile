@@ -1,6 +1,6 @@
 FROM php:8.2-fpm
 
-# Install dependencies
+# Install system dependencies + PHP extensions required by Laravel & PhpSpreadsheet
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -15,19 +15,28 @@ RUN apt-get update && apt-get install -y \
     curl \
     nginx \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd pdo pdo_pgsql mbstring zip exif pcntl bcmath opcache
+    && docker-php-ext-install -j$(nproc) gd pdo pdo_pgsql mbstring zip exif pcntl bcmath opcache \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify extensions required by phpoffice/phpspreadsheet
+RUN php -m | grep -qi gd && php -m | grep -qi zip && php -m | grep -qi fileinfo
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set working directory
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_MEMORY_LIMIT=-1
+
 WORKDIR /var/www
 
-# Copy application
+# Install PHP dependencies first (better Docker layer cache)
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+# Copy application source
 COPY . .
 
-# Install dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+RUN composer dump-autoload --optimize --no-interaction
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www \
