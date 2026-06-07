@@ -2,13 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\DoanhNghiepExport;
+use App\Exports\DoanhNghiepTemplateExport;
 use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
 use App\Http\Resources\DoanhNghiepResource;
+use App\Imports\DoanhNghiepImport;
 use App\Models\DoanhNghiep;
 use App\Models\Member;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DoanhNghiepController extends ApiController
 {
@@ -20,64 +26,61 @@ class DoanhNghiepController extends ApiController
      */
     public function index(): AnonymousResourceCollection
     {
-        $query = DoanhNghiep::query()
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member'])
-            ->when(request('search'), function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
-                        ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%")
-                        ->orWhere('dia_chi', 'like', "%{$search}%");
-                });
-            })
-            ->when(request('quanHuyen'), function ($query, $quanHuyen) {
-                $query->where('quan_huyen', $quanHuyen);
-            })
-            ->when(request('phuongXa'), function ($query, $phuongXa) {
-                $query->where('phuong_xa', $phuongXa);
-            })
-            ->when(request('trangThai'), function ($query, $trangThai) {
-                $query->where('trang_thai', $trangThai);
-            })
-            ->when(request('loaiHinhDN'), function ($query, $loaiHinhDN) {
-                $query->where('loai_hinh_dn', $loaiHinhDN);
-            })
-            ->when(request('loaiDN'), function ($query, $loaiDN) {
-                $query->where('loai_dn', $loaiDN);
-            })
-            ->when(request()->has('daCapNhatDinhDanh'), function ($query) {
-                $daCapNhatDinhDanh = filter_var(request('daCapNhatDinhDanh'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-                if ($daCapNhatDinhDanh !== null) {
-                    $query->where('da_cap_nhat_dinh_danh', $daCapNhatDinhDanh);
-                }
-            })
-            ->when(request()->has('hasCoordinates'), function ($query) {
-                $hasCoordinates = filter_var(request('hasCoordinates'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-                if ($hasCoordinates === true) {
-                    $query->whereNotNull('long')->whereNotNull('lat');
-                } elseif ($hasCoordinates === false) {
-                    $query->where(function ($q) {
-                        $q->whereNull('long')->orWhereNull('lat');
-                    });
-                }
-            })
-            ->when(request('sortBy'), function ($query, $sortBy) {
-                $direction = request('sortDirection', 'asc');
-                $allowedSorts = [
-                    'tt', 'ma_so_doanh_nghiep', 'ten_doanh_nghiep',
-                    'quan_huyen', 'phuong_xa', 'trang_thai',
-                    'loai_hinh_dn', 'so_luong_lao_dong', 'created_at'
-                ];
-                if (in_array($sortBy, $allowedSorts)) {
-                    $query->orderBy($sortBy, $direction);
-                }
-            }, function ($query) {
-                $query->orderBy('created_at', 'desc');
-            });
-
         $perPage = request('perPage', 15);
-        $doanhNghieps = $query->paginate($perPage);
+        $doanhNghieps = $this->buildFilteredQuery()->paginate($perPage);
 
         return DoanhNghiepResource::collection($doanhNghieps);
+    }
+
+    /**
+     * Export filtered companies to Excel.
+     */
+    public function export(): BinaryFileResponse
+    {
+        $filename = 'doanh-nghiep_' . now()->format('Y-m-d_His') . '.xlsx';
+
+        $query = $this->buildFilteredQuery();
+        if (!request('sortBy')) {
+            $query->reorder()->orderByRaw('tt IS NULL')->orderBy('tt')->orderBy('id');
+        }
+
+        return Excel::download(
+            new DoanhNghiepExport($query),
+            $filename
+        );
+    }
+
+    /**
+     * Download empty Excel template for import.
+     */
+    public function exportTemplate(): BinaryFileResponse
+    {
+        return Excel::download(
+            new DoanhNghiepTemplateExport(),
+            'mau-import-doanh-nghiep.xlsx'
+        );
+    }
+
+    /**
+     * Import companies from Excel file.
+     */
+    public function import(): JsonResponse
+    {
+        request()->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+
+        $import = new DoanhNghiepImport();
+        Excel::import($import, request()->file('file'));
+
+        $result = $import->getResult();
+        $total = $result['imported'] + $result['updated'];
+
+        return $this->success(
+            $result,
+            "Import hoàn tất: {$result['imported']} mới, {$result['updated']} cập nhật, {$result['failed']} lỗi.",
+            $total > 0 ? 200 : 422
+        );
     }
 
     /**
@@ -210,6 +213,66 @@ class DoanhNghiepController extends ApiController
                 'investment_amount' => $item['investmentAmount'] ?? null,
             ]);
         }
+    }
+
+    /**
+     * Build filtered query shared by index and export.
+     */
+    private function buildFilteredQuery(): Builder
+    {
+        return DoanhNghiep::query()
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member'])
+            ->when(request('search'), function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
+                        ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%")
+                        ->orWhere('dia_chi', 'like', "%{$search}%");
+                });
+            })
+            ->when(request('quanHuyen'), function ($query, $quanHuyen) {
+                $query->where('quan_huyen', $quanHuyen);
+            })
+            ->when(request('phuongXa'), function ($query, $phuongXa) {
+                $query->where('phuong_xa', $phuongXa);
+            })
+            ->when(request('trangThai'), function ($query, $trangThai) {
+                $query->where('trang_thai', $trangThai);
+            })
+            ->when(request('loaiHinhDN'), function ($query, $loaiHinhDN) {
+                $query->where('loai_hinh_dn', $loaiHinhDN);
+            })
+            ->when(request('loaiDN'), function ($query, $loaiDN) {
+                $query->where('loai_dn', $loaiDN);
+            })
+            ->when(request()->has('daCapNhatDinhDanh'), function ($query) {
+                $daCapNhatDinhDanh = filter_var(request('daCapNhatDinhDanh'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($daCapNhatDinhDanh !== null) {
+                    $query->where('da_cap_nhat_dinh_danh', $daCapNhatDinhDanh);
+                }
+            })
+            ->when(request()->has('hasCoordinates'), function ($query) {
+                $hasCoordinates = filter_var(request('hasCoordinates'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($hasCoordinates === true) {
+                    $query->whereNotNull('long')->whereNotNull('lat');
+                } elseif ($hasCoordinates === false) {
+                    $query->where(function ($q) {
+                        $q->whereNull('long')->orWhereNull('lat');
+                    });
+                }
+            })
+            ->when(request('sortBy'), function ($query, $sortBy) {
+                $direction = request('sortDirection', 'asc');
+                $allowedSorts = [
+                    'tt', 'ma_so_doanh_nghiep', 'ten_doanh_nghiep',
+                    'quan_huyen', 'phuong_xa', 'trang_thai',
+                    'loai_hinh_dn', 'so_luong_lao_dong', 'created_at',
+                ];
+                if (in_array($sortBy, $allowedSorts)) {
+                    $query->orderBy($sortBy, $direction);
+                }
+            }, function ($query) {
+                $query->orderBy('created_at', 'desc');
+            });
     }
 
     /**

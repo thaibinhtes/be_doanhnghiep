@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'check']);
 
+Route::get('/doanh-nghiep/export', [DoanhNghiepController::class, 'export']);
+Route::get('/doanh-nghiep/export-template', [DoanhNghiepController::class, 'exportTemplate']);
+Route::post('/doanh-nghiep/import', [DoanhNghiepController::class, 'import']);
 Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
 Route::patch('/doanh-nghiep/{doanhNghiep}/dinh-danh', [DoanhNghiepController::class, 'updateDinhDanh']);
 Route::apiResource('members', MemberController::class);
