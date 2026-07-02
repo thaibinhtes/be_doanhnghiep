@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exports\DoanhNghiepExport;
+use App\Exports\DoanhNghiepDinhDanhTemplateExport;
 use App\Exports\DoanhNghiepTemplateExport;
 use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
@@ -60,6 +61,17 @@ class DoanhNghiepController extends ApiController
         return Excel::download(
             new DoanhNghiepTemplateExport(),
             'mau-import-doanh-nghiep.xlsx'
+        );
+    }
+
+    /**
+     * Download identity import template.
+     */
+    public function exportIdentityTemplate(): BinaryFileResponse
+    {
+        return Excel::download(
+            new DoanhNghiepDinhDanhTemplateExport(),
+            'mau-import-dinh-danh-doanh-nghiep.xlsx'
         );
     }
 

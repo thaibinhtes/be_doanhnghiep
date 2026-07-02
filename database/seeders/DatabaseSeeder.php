@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(RolePermissionSeeder::class);
         $this->call(DnTrangThaiSeeder::class);
+        $this->call(ImportTemplateSettingSeeder::class);
 
         $members = Member::factory(20)->create();
 

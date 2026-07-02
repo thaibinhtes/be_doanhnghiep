@@ -46,14 +46,14 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
                 'ten doanh nghiep',
                 'ten_doanh_nghiep',
             ]) ?? ''));
-            $dinhDanhText = trim((string) ($this->pickValue($raw, [
+            $dinhDanhValue = $this->pickValue($raw, [
                 'định danh',
                 'dinh danh',
                 'trạng thái định danh',
                 'trang thai dinh danh',
-            ]) ?? ''));
+            ]);
 
-            if ($msdn === '' && $tenDoanhNghiep === '' && $dinhDanhText === '') {
+            if ($msdn === '' && $tenDoanhNghiep === '' && ($dinhDanhValue === null || $dinhDanhValue === '')) {
                 continue;
             }
 
@@ -66,12 +66,12 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
                 continue;
             }
 
-            $daCapNhatDinhDanh = $this->parseDinhDanhValue($dinhDanhText);
+            $daCapNhatDinhDanh = $this->parseDinhDanhValue($dinhDanhValue);
             if ($daCapNhatDinhDanh === null) {
                 $this->failed++;
                 $this->errors[] = [
                     'row' => $rowNumber,
-                    'message' => 'Giá trị cột "định danh" không hợp lệ. Dùng "định danh" hoặc "chưa định danh".',
+                    'message' => 'Giá trị cột "định danh" không hợp lệ. Chỉ chấp nhận integer: 1 (định danh) hoặc 0 (chưa định danh).',
                 ];
                 continue;
             }
@@ -122,23 +122,13 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
         return null;
     }
 
-    private function parseDinhDanhValue(string $value): ?bool
+    private function parseDinhDanhValue(mixed $value): ?bool
     {
-        $normalized = mb_strtolower(trim($value));
-        $normalized = preg_replace('/\s+/', ' ', $normalized ?? '');
-
-        if ($normalized === null || $normalized === '') {
-            return null;
-        }
-
-        $truthy = ['định danh', 'da dinh danh', 'đã định danh', 'true', '1', 'yes', 'x'];
-        $falsy = ['chưa định danh', 'chua dinh danh', 'false', '0', 'no', ''];
-
-        if (in_array($normalized, $truthy, true)) {
+        if ($value === 1 || $value === '1') {
             return true;
         }
 
-        if (in_array($normalized, $falsy, true)) {
+        if ($value === 0 || $value === '0') {
             return false;
         }
 

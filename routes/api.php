@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\TinhThanhController;
 use Illuminate\Support\Facades\Route;
 
@@ -46,11 +47,13 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('/doanh-nghiep/export', [DoanhNghiepController::class, 'export']);
     Route::get('/doanh-nghiep/export-template', [DoanhNghiepController::class, 'exportTemplate']);
+    Route::get('/doanh-nghiep/export-template-dinh-danh', [DoanhNghiepController::class, 'exportIdentityTemplate']);
     Route::post('/doanh-nghiep/import', [DoanhNghiepController::class, 'import']);
     Route::post('/doanh-nghiep/import-dinh-danh', [DoanhNghiepController::class, 'importDinhDanh']);
     Route::patch('/doanh-nghiep/dinh-danh/bulk', [DoanhNghiepController::class, 'bulkUpdateDinhDanh']);
     Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
     Route::patch('/doanh-nghiep/{doanhNghiep}/dinh-danh', [DoanhNghiepController::class, 'updateDinhDanh']);
+    Route::get('/settings/company-import-docs', [SettingController::class, 'companyImportDocs']);
     Route::apiResource('members', MemberController::class);
     Route::apiResource('member-companies', MemberCompanyController::class);
 
