@@ -22,8 +22,9 @@ class BaoCaoTienDoDinhDanhExport implements FromArray, ShouldAutoSize, WithStyle
 
     public function __construct(
         private readonly BaoCaoTienDoDinhDanhService $service,
+        private readonly array $options = [],
     ) {
-        $this->report = $this->service->build();
+        $this->report = $this->service->build($this->options);
         $this->lastColumnIndex = 2 + (count($this->report['ranges']) * 5) + 1;
     }
 

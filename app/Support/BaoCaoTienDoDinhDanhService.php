@@ -5,232 +5,259 @@ namespace App\Support;
 use App\Models\DoanhNghiep;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
 class BaoCaoTienDoDinhDanhService
 {
-  private const DISSOLVED_STATUS_MAS = [
-    'giai_the_pha_san',
-    'tam_ngung',
-    'khong_hoat_dong_dia_chi',
-    'giai_the_hop_nhat',
-    'thu_hoi_gcn',
-  ];
-
-  /**
-   * @return array<string, mixed>
-   */
-  public function build(?Carbon $reportDate = null): array
-  {
-    $reportDate ??= now()->startOfDay();
-
-    $ranges = [
-      [
-        'key' => 'before_2026',
-        'label' => 'Từ trước đến 31/12/2025',
-        'from' => null,
-        'to' => '2025-12-31',
-      ],
-      [
-        'key' => 'year_2026',
-        'label' => 'Từ 01/01/2026 đến ' . $reportDate->format('d/m/Y'),
-        'from' => '2026-01-01',
-        'to' => $reportDate->toDateString(),
-      ],
+    private const DISSOLVED_STATUS_MAS = [
+        'giai_the_pha_san',
+        'tam_ngung',
+        'khong_hoat_dong_dia_chi',
+        'giai_the_hop_nhat',
+        'thu_hoi_gcn',
     ];
 
-    $companies = DoanhNghiep::query()
-      ->with('dnTrangThai')
-      ->get();
+    /**
+     * @param  array{reportDate?: string|null, range1To?: string|null, range2From?: string|null, range2To?: string|null}  $options
+     * @return array<string, mixed>
+     */
+    public function build(array $options = []): array
+    {
+        $reportDate = $this->parseDate($options['reportDate'] ?? null) ?? now()->startOfDay();
+        $range1To = $this->parseDate($options['range1To'] ?? '2025-12-31') ?? Carbon::parse('2025-12-31')->startOfDay();
+        $range2From = $this->parseDate($options['range2From'] ?? '2026-01-01') ?? Carbon::parse('2026-01-01')->startOfDay();
+        $range2To = $this->parseDate($options['range2To'] ?? $reportDate->toDateString()) ?? $reportDate->copy();
 
-    $rowDefinitions = [
-      ['key' => 'doanh_nghiep', 'label' => 'Đối với doanh nghiệp', 'filter' => fn (DoanhNghiep $dn) => !$this->isHtx($dn)],
-      ['key' => 'htx', 'label' => 'Đối với HTX/LH HTX', 'filter' => fn (DoanhNghiep $dn) => $this->isHtx($dn)],
-    ];
+        if ($range2From->gt($range2To)) {
+            throw new InvalidArgumentException('Kỳ 2: ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
+        }
 
-    $rows = [];
-    $totalsByRange = [];
+        $ranges = [
+            [
+                'key' => 'range_1',
+                'label' => 'Từ trước đến ' . $range1To->format('d/m/Y'),
+                'from' => null,
+                'to' => $range1To->toDateString(),
+            ],
+            [
+                'key' => 'range_2',
+                'label' => 'Từ ' . $range2From->format('d/m/Y') . ' đến ' . $range2To->format('d/m/Y'),
+                'from' => $range2From->toDateString(),
+                'to' => $range2To->toDateString(),
+            ],
+        ];
 
-    foreach ($ranges as $range) {
-      $totalsByRange[$range['key']] = $this->emptyMetrics();
+        $companies = DoanhNghiep::query()
+            ->with('dnTrangThai')
+            ->get();
+
+        $rowDefinitions = [
+            ['key' => 'doanh_nghiep', 'label' => 'Đối với doanh nghiệp', 'filter' => fn (DoanhNghiep $dn) => !$this->isHtx($dn)],
+            ['key' => 'htx', 'label' => 'Đối với HTX/LH HTX', 'filter' => fn (DoanhNghiep $dn) => $this->isHtx($dn)],
+        ];
+
+        $rows = [];
+        $totalsByRange = [];
+
+        foreach ($ranges as $range) {
+            $totalsByRange[$range['key']] = $this->emptyMetrics();
+        }
+
+        foreach ($rowDefinitions as $index => $definition) {
+            $periods = [];
+
+            foreach ($ranges as $range) {
+                $metrics = $this->buildMetrics(
+                    $companies->filter($definition['filter']),
+                    $range['from'] ? Carbon::parse($range['from'])->startOfDay() : null,
+                    $range['to'] ? Carbon::parse($range['to'])->endOfDay() : null,
+                );
+
+                $periods[$range['key']] = $metrics;
+                $totalsByRange[$range['key']] = $this->sumMetrics($totalsByRange[$range['key']], $metrics);
+            }
+
+            $rows[] = [
+                'stt' => $index + 1,
+                'key' => $definition['key'],
+                'label' => $definition['label'],
+                'periods' => $periods,
+                'ghiChu' => null,
+            ];
+        }
+
+        $rows[] = [
+            'stt' => null,
+            'key' => 'tong_cong',
+            'label' => 'Tổng cộng',
+            'periods' => $totalsByRange,
+            'ghiChu' => null,
+            'isTotal' => true,
+        ];
+
+        return [
+            'title' => 'Biểu theo dõi tiến độ định danh tổ chức cho doanh nghiệp',
+            'reportDate' => $reportDate->toDateString(),
+            'reportDateLabel' => $this->formatVietnameseDate($reportDate),
+            'filters' => [
+                'range1To' => $range1To->toDateString(),
+                'range2From' => $range2From->toDateString(),
+                'range2To' => $range2To->toDateString(),
+            ],
+            'ranges' => $ranges,
+            'metricLabels' => $this->metricLabels(),
+            'rows' => $rows,
+            'generatedAt' => now()->toIso8601String(),
+        ];
     }
 
-    foreach ($rowDefinitions as $index => $definition) {
-      $periods = [];
+    /**
+     * @param  Collection<int, DoanhNghiep>  $companies
+     * @return array<string, int>
+     */
+    private function buildMetrics(Collection $companies, ?Carbon $from, ?Carbon $to): array
+    {
+        $inRange = $companies->filter(function (DoanhNghiep $company) use ($from, $to) {
+            return $this->isInDateRange($company->ngay_cap, $from, $to);
+        });
 
-      foreach ($ranges as $range) {
-        $metrics = $this->buildMetrics(
-          $companies->filter($definition['filter']),
-          $range['from'] ? Carbon::parse($range['from'])->startOfDay() : null,
-          $range['to'] ? Carbon::parse($range['to'])->endOfDay() : null,
-        );
+        $soLuongCapGcn = $inRange->count();
+        $donViGiaiThe = $inRange->filter(fn (DoanhNghiep $company) => $this->isDissolved($company))->count();
+        $active = $inRange->reject(fn (DoanhNghiep $company) => $this->isDissolved($company));
+        $canDinhDanh = $active->count();
+        $daDinhDanh = $active->filter(fn (DoanhNghiep $company) => (bool) $company->da_cap_nhat_dinh_danh)->count();
+        $chuaDinhDanh = max(0, $canDinhDanh - $daDinhDanh);
 
-        $periods[$range['key']] = $metrics;
-        $totalsByRange[$range['key']] = $this->sumMetrics($totalsByRange[$range['key']], $metrics);
-      }
-
-      $rows[] = [
-        'stt' => $index + 1,
-        'key' => $definition['key'],
-        'label' => $definition['label'],
-        'periods' => $periods,
-        'ghiChu' => null,
-      ];
+        return [
+            'soLuongCapGcn' => $soLuongCapGcn,
+            'donViGiaiThe' => $donViGiaiThe,
+            'canDinhDanh' => $canDinhDanh,
+            'daDinhDanh' => $daDinhDanh,
+            'chuaDinhDanh' => $chuaDinhDanh,
+        ];
     }
 
-    $rows[] = [
-      'stt' => null,
-      'key' => 'tong_cong',
-      'label' => 'Tổng cộng',
-      'periods' => $totalsByRange,
-      'ghiChu' => null,
-      'isTotal' => true,
-    ];
+    private function isHtx(DoanhNghiep $company): bool
+    {
+        $loaiHinh = mb_strtolower(trim((string) $company->loai_hinh_dn));
 
-    return [
-      'title' => 'Biểu theo dõi tiến độ định danh tổ chức cho doanh nghiệp',
-      'reportDate' => $reportDate->toDateString(),
-      'reportDateLabel' => $this->formatVietnameseDate($reportDate),
-      'ranges' => $ranges,
-      'metricLabels' => $this->metricLabels(),
-      'rows' => $rows,
-      'generatedAt' => now()->toIso8601String(),
-    ];
-  }
+        if ($loaiHinh === '') {
+            return false;
+        }
 
-  /**
-   * @param  Collection<int, DoanhNghiep>  $companies
-   * @return array<string, int>
-   */
-  private function buildMetrics(Collection $companies, ?Carbon $from, ?Carbon $to): array
-  {
-    $inRange = $companies->filter(function (DoanhNghiep $company) use ($from, $to) {
-      return $this->isInDateRange($company->ngay_cap, $from, $to);
-    });
-
-    $soLuongCapGcn = $inRange->count();
-    $donViGiaiThe = $inRange->filter(fn (DoanhNghiep $company) => $this->isDissolved($company))->count();
-    $active = $inRange->reject(fn (DoanhNghiep $company) => $this->isDissolved($company));
-    $canDinhDanh = $active->count();
-    $daDinhDanh = $active->filter(fn (DoanhNghiep $company) => (bool) $company->da_cap_nhat_dinh_danh)->count();
-    $chuaDinhDanh = max(0, $canDinhDanh - $daDinhDanh);
-
-    return [
-      'soLuongCapGcn' => $soLuongCapGcn,
-      'donViGiaiThe' => $donViGiaiThe,
-      'canDinhDanh' => $canDinhDanh,
-      'daDinhDanh' => $daDinhDanh,
-      'chuaDinhDanh' => $chuaDinhDanh,
-    ];
-  }
-
-  private function isHtx(DoanhNghiep $company): bool
-  {
-    $loaiHinh = mb_strtolower(trim((string) $company->loai_hinh_dn));
-
-    if ($loaiHinh === '') {
-      return false;
+        return str_contains($loaiHinh, 'htx')
+            || str_contains($loaiHinh, 'hợp tác xã')
+            || str_contains($loaiHinh, 'liên hiệp');
     }
 
-    return str_contains($loaiHinh, 'htx')
-      || str_contains($loaiHinh, 'hợp tác xã')
-      || str_contains($loaiHinh, 'liên hiệp');
-  }
+    private function isDissolved(DoanhNghiep $company): bool
+    {
+        $ma = $company->dnTrangThai?->ma;
 
-  private function isDissolved(DoanhNghiep $company): bool
-  {
-    $ma = $company->dnTrangThai?->ma;
-
-    return $ma !== null && in_array($ma, self::DISSOLVED_STATUS_MAS, true);
-  }
-
-  private function isInDateRange(?string $ngayCap, ?Carbon $from, ?Carbon $to): bool
-  {
-    $date = $this->parseNgayCap($ngayCap);
-
-    if (!$date) {
-      return false;
+        return $ma !== null && in_array($ma, self::DISSOLVED_STATUS_MAS, true);
     }
 
-    if ($from && $date->lt($from)) {
-      return false;
+    private function isInDateRange(?string $ngayCap, ?Carbon $from, ?Carbon $to): bool
+    {
+        $date = $this->parseNgayCap($ngayCap);
+
+        if (!$date) {
+            return false;
+        }
+
+        if ($from && $date->lt($from)) {
+            return false;
+        }
+
+        if ($to && $date->gt($to)) {
+            return false;
+        }
+
+        return true;
     }
 
-    if ($to && $date->gt($to)) {
-      return false;
+    private function parseNgayCap(?string $value): ?Carbon
+    {
+        if (!$value || trim($value) === '') {
+            return null;
+        }
+
+        $value = trim($value);
+
+        foreach (['d/m/Y', 'd-m-Y', 'Y-m-d'] as $format) {
+            try {
+                return Carbon::createFromFormat($format, $value)->startOfDay();
+            } catch (\Throwable) {
+                // try next format
+            }
+        }
+
+        try {
+            return Carbon::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
-    return true;
-  }
+    private function parseDate(?string $value): ?Carbon
+    {
+        if (!$value || trim($value) === '') {
+            return null;
+        }
 
-  private function parseNgayCap(?string $value): ?Carbon
-  {
-    if (!$value || trim($value) === '') {
-      return null;
+        try {
+            return Carbon::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
-    $value = trim($value);
-
-    foreach (['d/m/Y', 'd-m-Y', 'Y-m-d'] as $format) {
-      try {
-        return Carbon::createFromFormat($format, $value)->startOfDay();
-      } catch (\Throwable) {
-        // try next format
-      }
+    private function formatVietnameseDate(Carbon $date): string
+    {
+        return sprintf('ngày %d tháng %d năm %d', $date->day, $date->month, $date->year);
     }
 
-    try {
-      return Carbon::parse($value)->startOfDay();
-    } catch (\Throwable) {
-      return null;
-    }
-  }
-
-  private function formatVietnameseDate(Carbon $date): string
-  {
-    return sprintf('ngày %d tháng %d năm %d', $date->day, $date->month, $date->year);
-  }
-
-  /**
-   * @return array<string, string>
-   */
-  public function metricLabels(): array
-  {
-    return [
-      'soLuongCapGcn' => 'Số lượng DN/HTX được cấp Giấy CN.ĐK DN',
-      'donViGiaiThe' => 'Đơn vị giải thể, ngưng hoạt động',
-      'canDinhDanh' => 'Số lượng doanh nghiệp cần định danh tổ chức',
-      'daDinhDanh' => 'Số lượng doanh nghiệp đã định danh tổ chức',
-      'chuaDinhDanh' => 'Số lượng doanh nghiệp chưa định danh tổ chức',
-    ];
-  }
-
-  /**
-   * @return array<string, int>
-   */
-  private function emptyMetrics(): array
-  {
-    return [
-      'soLuongCapGcn' => 0,
-      'donViGiaiThe' => 0,
-      'canDinhDanh' => 0,
-      'daDinhDanh' => 0,
-      'chuaDinhDanh' => 0,
-    ];
-  }
-
-  /**
-   * @param  array<string, int>  $left
-   * @param  array<string, int>  $right
-   * @return array<string, int>
-   */
-  private function sumMetrics(array $left, array $right): array
-  {
-    $result = [];
-
-    foreach (array_keys($this->emptyMetrics()) as $key) {
-      $result[$key] = ($left[$key] ?? 0) + ($right[$key] ?? 0);
+    /**
+     * @return array<string, string>
+     */
+    public function metricLabels(): array
+    {
+        return [
+            'soLuongCapGcn' => 'Số lượng DN/HTX được cấp Giấy CN.ĐK DN',
+            'donViGiaiThe' => 'Đơn vị giải thể, ngưng hoạt động',
+            'canDinhDanh' => 'Số lượng doanh nghiệp cần định danh tổ chức',
+            'daDinhDanh' => 'Số lượng doanh nghiệp đã định danh tổ chức',
+            'chuaDinhDanh' => 'Số lượng doanh nghiệp chưa định danh tổ chức',
+        ];
     }
 
-    return $result;
-  }
+    /**
+     * @return array<string, int>
+     */
+    private function emptyMetrics(): array
+    {
+        return [
+            'soLuongCapGcn' => 0,
+            'donViGiaiThe' => 0,
+            'canDinhDanh' => 0,
+            'daDinhDanh' => 0,
+            'chuaDinhDanh' => 0,
+        ];
+    }
+
+    /**
+     * @param  array<string, int>  $left
+     * @param  array<string, int>  $right
+     * @return array<string, int>
+     */
+    private function sumMetrics(array $left, array $right): array
+    {
+        $result = [];
+
+        foreach (array_keys($this->emptyMetrics()) as $key) {
+            $result[$key] = ($left[$key] ?? 0) + ($right[$key] ?? 0);
+        }
+
+        return $result;
+    }
 }
