@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\TinhThanhController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'check']);
@@ -25,6 +26,9 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/roles/{role}', [RoleController::class, 'show']);
         Route::put('/roles/{role}/permissions', [RoleController::class, 'updatePermissions']);
     });
+
+    Route::get('/tinh-thanh', [TinhThanhController::class, 'index']);
+    Route::get('/tinh-thanh/{code}/xa-phuong', [TinhThanhController::class, 'xaPhuong']);
 
     Route::get('/reports/tong-hop', [ReportController::class, 'tongHop']);
     Route::get('/reports/tong-hop/export', [ReportController::class, 'exportTongHop']);
