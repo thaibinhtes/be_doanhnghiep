@@ -13,6 +13,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(RolePermissionSeeder::class);
+        $this->call(DnTrangThaiSeeder::class);
+
         $members = Member::factory(20)->create();
 
         $companies = DoanhNghiep::factory(10)->make()->each(function ($company) use ($members) {

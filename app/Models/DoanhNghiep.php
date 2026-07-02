@@ -24,6 +24,8 @@ class DoanhNghiep extends Model
         'phuong_xa',
         'von_dieu_le',
         'trang_thai',
+        'dn_trang_thai_id',
+        'ly_do_trang_thai',
         'da_cap_nhat_dinh_danh',
         'dien_thoai',
         'nguoi_dai_dien_ten',
@@ -83,5 +85,10 @@ class DoanhNghiep extends Model
     public function nguoiDaiDien(): BelongsTo
     {
         return $this->belongsTo(Member::class, 'nguoi_dai_dien_id');
+    }
+
+    public function dnTrangThai(): BelongsTo
+    {
+        return $this->belongsTo(DnTrangThai::class, 'dn_trang_thai_id');
     }
 }

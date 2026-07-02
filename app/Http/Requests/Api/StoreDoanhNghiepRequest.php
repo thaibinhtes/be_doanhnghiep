@@ -32,6 +32,8 @@ class StoreDoanhNghiepRequest extends FormRequest
             'phuongXa' => ['nullable', 'string', 'max:100'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
             'trangThai' => ['nullable', 'string', 'max:100'],
+            'dnTrangThaiId' => ['nullable', 'integer', 'exists:dn_trang_thais,id'],
+            'lyDoTrangThai' => ['nullable', 'string'],
             'daCapNhatDinhDanh' => ['nullable', 'boolean'],
             'dienThoai' => ['nullable', 'string', 'max:50'],
             'nguoiDaiDienTen' => ['nullable', 'string', 'max:255'],

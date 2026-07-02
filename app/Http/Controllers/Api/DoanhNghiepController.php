@@ -10,6 +10,7 @@ use App\Http\Resources\DoanhNghiepResource;
 use App\Imports\DoanhNghiepImport;
 use App\Models\DoanhNghiep;
 use App\Models\Member;
+use App\Support\DoanhNghiepStatusHelper;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -93,13 +94,14 @@ class DoanhNghiepController extends ApiController
         unset($validated['danhSachThanhVienGopVon']);
 
         $data = $this->mapCamelToSnake($validated);
+        $data = DoanhNghiepStatusHelper::applyStatus($data);
         $doanhNghiep = DoanhNghiep::create($data);
 
         if (!empty($danhSachTV)) {
             $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
         }
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep),
@@ -113,7 +115,7 @@ class DoanhNghiepController extends ApiController
      */
     public function show(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
 
         return $this->success(new DoanhNghiepResource($doanhNghiep));
     }
@@ -133,6 +135,7 @@ class DoanhNghiepController extends ApiController
         }
 
         $data = $this->mapCamelToSnake($validated);
+        $data = DoanhNghiepStatusHelper::applyStatus($data, $doanhNghiep);
 
         if (!empty($data)) {
             $doanhNghiep->update($data);
@@ -144,7 +147,7 @@ class DoanhNghiepController extends ApiController
             $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
         }
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
@@ -171,10 +174,8 @@ class DoanhNghiepController extends ApiController
             'daCapNhatDinhDanh' => ['required', 'boolean'],
         ]);
 
-        $doanhNghiep->update([
-            'da_cap_nhat_dinh_danh' => $validated['daCapNhatDinhDanh'],
-        ]);
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member']);
+        DoanhNghiepStatusHelper::syncDinhDanhStatus($doanhNghiep, $validated['daCapNhatDinhDanh']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
@@ -221,7 +222,7 @@ class DoanhNghiepController extends ApiController
     private function buildFilteredQuery(): Builder
     {
         return DoanhNghiep::query()
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member'])
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai'])
             ->when(request('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
@@ -237,6 +238,9 @@ class DoanhNghiepController extends ApiController
             })
             ->when(request('trangThai'), function ($query, $trangThai) {
                 $query->where('trang_thai', $trangThai);
+            })
+            ->when(request('dnTrangThaiId'), function ($query, $dnTrangThaiId) {
+                $query->where('dn_trang_thai_id', $dnTrangThaiId);
             })
             ->when(request('loaiHinhDN'), function ($query, $loaiHinhDN) {
                 $query->where('loai_hinh_dn', $loaiHinhDN);
@@ -290,6 +294,8 @@ class DoanhNghiepController extends ApiController
             'phuongXa' => 'phuong_xa',
             'vonDieuLe' => 'von_dieu_le',
             'trangThai' => 'trang_thai',
+            'dnTrangThaiId' => 'dn_trang_thai_id',
+            'lyDoTrangThai' => 'ly_do_trang_thai',
             'daCapNhatDinhDanh' => 'da_cap_nhat_dinh_danh',
             'dienThoai' => 'dien_thoai',
             'nguoiDaiDienTen' => 'nguoi_dai_dien_ten',
