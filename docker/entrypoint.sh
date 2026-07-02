@@ -13,6 +13,10 @@ if ! grep -qE '^APP_KEY=base64:' .env; then
   php artisan key:generate --force
 fi
 
+if ! grep -qE '^JWT_SECRET=.+' .env; then
+  php artisan jwt:secret --force
+fi
+
 mkdir -p database
 touch database/database.sqlite
 
