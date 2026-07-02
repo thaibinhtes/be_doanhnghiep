@@ -47,6 +47,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/doanh-nghiep/export', [DoanhNghiepController::class, 'export']);
     Route::get('/doanh-nghiep/export-template', [DoanhNghiepController::class, 'exportTemplate']);
     Route::post('/doanh-nghiep/import', [DoanhNghiepController::class, 'import']);
+    Route::post('/doanh-nghiep/import-dinh-danh', [DoanhNghiepController::class, 'importDinhDanh']);
+    Route::patch('/doanh-nghiep/dinh-danh/bulk', [DoanhNghiepController::class, 'bulkUpdateDinhDanh']);
     Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
     Route::patch('/doanh-nghiep/{doanhNghiep}/dinh-danh', [DoanhNghiepController::class, 'updateDinhDanh']);
     Route::apiResource('members', MemberController::class);

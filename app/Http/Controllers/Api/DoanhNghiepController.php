@@ -7,6 +7,7 @@ use App\Exports\DoanhNghiepTemplateExport;
 use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
 use App\Http\Resources\DoanhNghiepResource;
+use App\Imports\DoanhNghiepDinhDanhImport;
 use App\Imports\DoanhNghiepImport;
 use App\Models\DoanhNghiep;
 use App\Models\Member;
@@ -81,6 +82,29 @@ class DoanhNghiepController extends ApiController
             $result,
             "Import hoàn tất: {$result['imported']} mới, {$result['updated']} cập nhật, {$result['failed']} lỗi.",
             $total > 0 ? 200 : 422
+        );
+    }
+
+    /**
+     * Import identity status updates from Excel file.
+     */
+    public function importDinhDanh(): JsonResponse
+    {
+        request()->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+
+        $import = new DoanhNghiepDinhDanhImport();
+        Excel::import($import, request()->file('file'));
+
+        $result = $import->getResult();
+        $total = $result['updated'];
+        $statusCode = $total > 0 || $result['failed'] === 0 ? 200 : 422;
+
+        return $this->success(
+            $result,
+            "Import định danh hoàn tất: {$result['updated']} cập nhật, {$result['failed']} lỗi.",
+            $statusCode
         );
     }
 
@@ -180,6 +204,49 @@ class DoanhNghiepController extends ApiController
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
             $validated['daCapNhatDinhDanh'] ? self::DINH_DANH_LABEL_UPDATED : self::DINH_DANH_LABEL_PENDING
+        );
+    }
+
+    /**
+     * Bulk update identity verification status by company business codes.
+     */
+    public function bulkUpdateDinhDanh(): JsonResponse
+    {
+        $validated = request()->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.maSoDoanhNghiep' => ['required', 'string', 'max:50'],
+            'items.*.daCapNhatDinhDanh' => ['required', 'boolean'],
+        ]);
+
+        $updated = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($validated['items'] as $index => $item) {
+            $msdn = trim((string) $item['maSoDoanhNghiep']);
+            $company = DoanhNghiep::query()->where('ma_so_doanh_nghiep', $msdn)->first();
+
+            if (!$company) {
+                $failed++;
+                $errors[] = [
+                    'row' => $index + 1,
+                    'message' => "Không tìm thấy doanh nghiệp với MSDN {$msdn}.",
+                ];
+                continue;
+            }
+
+            DoanhNghiepStatusHelper::syncDinhDanhStatus($company, (bool) $item['daCapNhatDinhDanh']);
+            $updated++;
+        }
+
+        return $this->success(
+            [
+                'imported' => 0,
+                'updated' => $updated,
+                'failed' => $failed,
+                'errors' => $errors,
+            ],
+            "Cập nhật định danh hàng loạt: {$updated} thành công, {$failed} lỗi."
         );
     }
 
