@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\DoanhNghiep;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -21,7 +22,7 @@ class BaoCaoTienDoDinhDanhService
      * @param  array{reportDate?: string|null, range1To?: string|null, range2From?: string|null, range2To?: string|null}  $options
      * @return array<string, mixed>
      */
-    public function build(array $options = []): array
+    public function build(array $options = [], ?User $user = null): array
     {
         $reportDate = $this->parseDate($options['reportDate'] ?? null) ?? now()->startOfDay();
         $range1To = $this->parseDate($options['range1To'] ?? '2025-12-31') ?? Carbon::parse('2025-12-31')->startOfDay();
@@ -47,7 +48,7 @@ class BaoCaoTienDoDinhDanhService
             ],
         ];
 
-        $companies = DoanhNghiep::query()
+        $companies = DoanhNghiepScopeHelper::query($user)
             ->with('dnTrangThai')
             ->get();
 

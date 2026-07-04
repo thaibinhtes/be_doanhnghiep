@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Models\DanhMucNganhNghe;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 
 class DoanhNghiepResource extends JsonResource
 {
@@ -14,6 +16,9 @@ class DoanhNghiepResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $nganhNgheCatalog = $this->resolveNganhNgheCatalog();
+        $nganhNgheKdCodes = $this->nganh_nghe_kd ?? [];
+
         return [
             'id' => $this->id,
             'tt' => $this->tt,
@@ -38,12 +43,41 @@ class DoanhNghiepResource extends JsonResource
             'nguoiDaiDien' => $this->whenLoaded('nguoiDaiDien', fn () => new MemberResource($this->nguoiDaiDien)),
             'chuSoHuu' => $this->whenLoaded('chuSoHuu', fn () => new MemberResource($this->chuSoHuu)),
             'nganhNgheKDChinh' => $this->nganh_nghe_kd_chinh,
-            'nganhNgheKD' => $this->nganh_nghe_kd,
+            'nganhNgheKDChinhTen' => $this->nganh_nghe_kd_chinh
+                ? ($nganhNgheCatalog->get($this->nganh_nghe_kd_chinh)?->ten ?? $this->nganhNgheKdChinh?->ten)
+                : null,
+            'nganhNgheKDChinhInfo' => $this->when(
+                $this->nganh_nghe_kd_chinh && ($this->relationLoaded('nganhNgheKdChinh') || $nganhNgheCatalog->has($this->nganh_nghe_kd_chinh)),
+                fn () => new DanhMucNganhNgheResource(
+                    $this->nganhNgheKdChinh ?? $nganhNgheCatalog->get($this->nganh_nghe_kd_chinh)
+                )
+            ),
+            'nganhNgheKD' => $nganhNgheKdCodes,
+            'nganhNgheKDList' => collect($nganhNgheKdCodes)
+                ->map(fn (string $code) => [
+                    'ma' => $code,
+                    'ten' => $nganhNgheCatalog->get($code)?->ten,
+                ])
+                ->values()
+                ->all(),
+            'nganhNgheKDTen' => collect($nganhNgheKdCodes)
+                ->map(function (string $code) use ($nganhNgheCatalog) {
+                    $ten = $nganhNgheCatalog->get($code)?->ten;
+
+                    return $ten ? "{$code} - {$ten}" : $code;
+                })
+                ->implode('; '),
             'ngayCap' => $this->ngay_cap,
             'ngayDangKyThayDoi' => $this->ngay_dang_ky_thay_doi,
             'loaiHinhDN' => $this->loai_hinh_dn,
+            'dnLoaiHinhId' => $this->dn_loai_hinh_id,
+            'dnLoaiHinh' => $this->whenLoaded('dnLoaiHinh', fn () => new DnLoaiHinhResource($this->dnLoaiHinh)),
             'soLuongLaoDong' => $this->so_luong_lao_dong,
             'loaiDN' => $this->loai_dn,
+            'donViId' => $this->don_vi_id,
+            'donVi' => $this->whenLoaded('donVi', fn () => new DonViResource($this->donVi)),
+            'createdByUserId' => $this->created_by_user_id,
+            'createdByUser' => $this->whenLoaded('createdByUser', fn () => new UserResource($this->createdByUser)),
             'dsCoDong' => $this->ds_co_dong,
             'dsThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () =>
                 $this->memberCompanies->map(fn ($mc) => [
@@ -68,5 +102,22 @@ class DoanhNghiepResource extends JsonResource
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function resolveNganhNgheCatalog(): Collection
+    {
+        $codes = array_values(array_unique(array_filter(array_merge(
+            $this->nganh_nghe_kd ?? [],
+            $this->nganh_nghe_kd_chinh ? [$this->nganh_nghe_kd_chinh] : []
+        ))));
+
+        if ($codes === []) {
+            return collect();
+        }
+
+        return DanhMucNganhNghe::query()
+            ->whereIn('ma', $codes)
+            ->get(['id', 'ma', 'ten', 'cap'])
+            ->keyBy('ma');
     }
 }

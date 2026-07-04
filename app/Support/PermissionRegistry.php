@@ -12,6 +12,9 @@ class PermissionRegistry
     public static function all(): array
     {
         return [
+            // Menu — Tổng quan
+            ['key' => 'menu.dashboard', 'name' => 'Dashboard', 'type' => 'menu', 'group_name' => 'Tổng quan', 'path' => '/dashboard', 'sort_order' => 1],
+
             // Menu — Doanh nghiệp
             ['key' => 'menu.companies.list', 'name' => 'Danh sách doanh nghiệp', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/companies', 'sort_order' => 10],
             ['key' => 'menu.companies.map', 'name' => 'Bản đồ doanh nghiệp', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/companies/map', 'sort_order' => 11],
@@ -29,6 +32,11 @@ class PermissionRegistry
 
             // Menu — Hệ thống
             ['key' => 'menu.admin.roles', 'name' => 'Phân quyền', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/roles', 'sort_order' => 30],
+            ['key' => 'menu.admin.cadastral', 'name' => 'Quản lý địa chính', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/cadastral', 'sort_order' => 31],
+            ['key' => 'menu.admin.business-types', 'name' => 'Loại hình doanh nghiệp', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/business-types', 'sort_order' => 32],
+            ['key' => 'menu.admin.industry-categories', 'name' => 'Danh mục ngành nghề', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/industry-categories', 'sort_order' => 33],
+            ['key' => 'menu.admin.org-units', 'name' => 'Quản lý đơn vị', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/org-units', 'sort_order' => 34],
+            ['key' => 'menu.admin.users', 'name' => 'Quản lý người dùng', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/users', 'sort_order' => 35],
 
             // Feature — Doanh nghiệp
             ['key' => 'feature.companies.create', 'name' => 'Tạo doanh nghiệp', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 100],
@@ -48,6 +56,12 @@ class PermissionRegistry
             // Feature — Hệ thống
             ['key' => 'feature.roles.manage', 'name' => 'Quản lý phân quyền', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 120],
             ['key' => 'feature.statuses.manage', 'name' => 'Quản lý trạng thái doanh nghiệp', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 121],
+            ['key' => 'feature.cadastral.manage', 'name' => 'Quản lý mapping hành chính', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 122],
+            ['key' => 'feature.business-types.manage', 'name' => 'Quản lý loại hình doanh nghiệp', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 123],
+            ['key' => 'feature.industry-categories.manage', 'name' => 'Quản lý danh mục ngành nghề', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 124],
+            ['key' => 'feature.org-units.manage', 'name' => 'Quản lý đơn vị', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 125],
+            ['key' => 'feature.org-units.view', 'name' => 'Xem dữ liệu theo đơn vị', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 126],
+            ['key' => 'feature.users.manage', 'name' => 'Quản lý người dùng', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 127],
         ];
     }
 
@@ -59,12 +73,14 @@ class PermissionRegistry
     public static function viewerKeys(): array
     {
         return [
+            'menu.dashboard',
             'menu.companies.list',
             'menu.companies.map',
             'menu.companies.identity',
             'menu.reports.summary',
             'menu.reports.progress',
             'menu.members.list',
+            'feature.org-units.view',
         ];
     }
 

@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\DnTrangThai;
 use App\Models\DoanhNghiep;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class BaoCaoTongHopService
@@ -11,7 +13,7 @@ class BaoCaoTongHopService
     /**
      * @return array{stt: int, columns: array<int, array{ma: string, ten: string, count: int}>, generatedAt: string}
      */
-    public function build(): array
+    public function build(?User $user = null): array
     {
         $reportStatuses = DnTrangThai::query()
             ->where('hien_thi_bao_cao', true)
@@ -19,15 +21,15 @@ class BaoCaoTongHopService
             ->orderBy('thu_tu_bao_cao')
             ->get();
 
-        $countsByMa = DoanhNghiep::query()
+        $countsByMa = $this->companyQuery($user)
             ->join('dn_trang_thais', 'doanh_nghieps.dn_trang_thai_id', '=', 'dn_trang_thais.id')
             ->selectRaw('dn_trang_thais.ma, COUNT(*) as total')
             ->groupBy('dn_trang_thais.ma')
             ->pluck('total', 'ma');
 
-        $columns = $reportStatuses->map(function (DnTrangThai $status) use ($countsByMa) {
+        $columns = $reportStatuses->map(function (DnTrangThai $status) use ($countsByMa, $user) {
             $count = match ($status->ma) {
-                'dang_hoat_dong' => $this->countDangHoatDong(),
+                'dang_hoat_dong' => $this->countDangHoatDong($user),
                 default => (int) ($countsByMa[$status->ma] ?? 0),
             };
 
@@ -45,9 +47,14 @@ class BaoCaoTongHopService
         ];
     }
 
-    private function countDangHoatDong(): int
+    private function companyQuery(?User $user): Builder
     {
-        return DoanhNghiep::query()
+        return DoanhNghiepScopeHelper::query($user);
+    }
+
+    private function countDangHoatDong(?User $user): int
+    {
+        return $this->companyQuery($user)
             ->whereHas('dnTrangThai', function ($query) {
                 $query->whereIn('loai', ['dinh_danh', 'hoat_dong']);
             })

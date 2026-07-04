@@ -7,12 +7,23 @@ use App\Exports\DoanhNghiepDinhDanhTemplateExport;
 use App\Exports\DoanhNghiepTemplateExport;
 use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
+use App\Http\Resources\DnDinhDanhLichSuResource;
 use App\Http\Resources\DoanhNghiepResource;
 use App\Imports\DoanhNghiepDinhDanhImport;
-use App\Imports\DoanhNghiepImport;
+use App\Jobs\ProcessDoanhNghiepImportJob;
 use App\Models\DoanhNghiep;
+use App\Models\DoanhNghiepImportJob;
 use App\Models\Member;
+use App\Support\DinhDanhHistoryContext;
+use App\Support\DoanhNghiepExcelColumns;
+use App\Support\DoanhNghiepImportColumnMap;
+use App\Support\DoanhNghiepImportExtensionHelper;
+use App\Support\DoanhNghiepLoaiHinhHelper;
+use App\Support\DoanhNghiepNganhNgheHelper;
+use App\Support\DoanhNghiepScopeHelper;
 use App\Support\DoanhNghiepStatusHelper;
+use App\Support\ImportSocketNotifier;
+use App\Support\ImportSocketTopics;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -29,7 +40,7 @@ class DoanhNghiepController extends ApiController
      */
     public function index(): AnonymousResourceCollection
     {
-        $perPage = request('perPage', 15);
+        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 100);
         $doanhNghieps = $this->buildFilteredQuery()->paginate($perPage);
 
         return DoanhNghiepResource::collection($doanhNghieps);
@@ -76,24 +87,74 @@ class DoanhNghiepController extends ApiController
     }
 
     /**
-     * Import companies from Excel file.
+     * Default column mapping for unit-provided Excel templates.
+     */
+    public function importColumnMap(): JsonResponse
+    {
+        return $this->success([
+            'startRow' => DoanhNghiepImportColumnMap::DEFAULT_START_ROW,
+            'columnMap' => DoanhNghiepImportColumnMap::UNIT_TEMPLATE,
+            'columnLabels' => DoanhNghiepExcelColumns::columnLabels(),
+            'availableValueExtensions' => DoanhNghiepImportExtensionHelper::availableExtensions(),
+            'valueExtensions' => [],
+        ]);
+    }
+
+    /**
+     * Queue import companies from Excel file.
      */
     public function import(): JsonResponse
     {
         request()->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+            'valueExtensions' => ['nullable'],
         ]);
 
-        $import = new DoanhNghiepImport();
-        Excel::import($import, request()->file('file'));
+        $user = request()->user();
+        $startRow = request()->has('startRow')
+            ? (int) request('startRow')
+            : DoanhNghiepImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap(request()->input('columnMap'));
+        $valueExtensions = $this->parseImportValueExtensions(request()->input('valueExtensions'));
+        $useColumnMap = request()->has('startRow') || $columnMap !== null || $valueExtensions !== null;
 
-        $result = $import->getResult();
-        $total = $result['imported'] + $result['updated'];
+        $uploadedFile = request()->file('file');
+        $storedPath = $uploadedFile->store('imports/pending');
+
+        $importJob = DoanhNghiepImportJob::query()->create([
+            'user_id' => $user->id,
+            'status' => DoanhNghiepImportJob::STATUS_PENDING,
+            'type' => DoanhNghiepImportJob::TYPE_COMPANIES,
+            'file_path' => $storedPath,
+            'original_filename' => $uploadedFile->getClientOriginalName(),
+            'start_row' => $startRow,
+            'column_map' => $columnMap,
+            'value_extensions' => $valueExtensions,
+            'use_column_map' => $useColumnMap,
+        ]);
+
+        ProcessDoanhNghiepImportJob::dispatch($importJob->id);
+
+        ImportSocketNotifier::notify(
+            $user->id,
+            ImportSocketTopics::EXCEL_STARTED,
+            $importJob->id,
+            [
+                'status' => DoanhNghiepImportJob::STATUS_PENDING,
+                'originalFilename' => $importJob->original_filename,
+            ],
+        );
 
         return $this->success(
-            $result,
-            "Import hoàn tất: {$result['imported']} mới, {$result['updated']} cập nhật, {$result['failed']} lỗi.",
-            $total > 0 ? 200 : 422
+            [
+                'importJobId' => $importJob->id,
+                'status' => $importJob->status,
+                'originalFilename' => $importJob->original_filename,
+            ],
+            'Đã đưa file import vào hàng đợi. Bạn sẽ nhận thông báo khi hoàn tất.',
+            202,
         );
     }
 
@@ -106,10 +167,12 @@ class DoanhNghiepController extends ApiController
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
         ]);
 
-        $import = new DoanhNghiepDinhDanhImport();
-        Excel::import($import, request()->file('file'));
+        $import = new DoanhNghiepDinhDanhImport(request()->user());
+        $result = DinhDanhHistoryContext::run(['nguon' => 'import'], function () use ($import) {
+            Excel::import($import, request()->file('file'));
 
-        $result = $import->getResult();
+            return $import->getResult();
+        });
         $total = $result['updated'];
         $statusCode = $total > 0 || $result['failed'] === 0 ? 200 : 422;
 
@@ -131,13 +194,26 @@ class DoanhNghiepController extends ApiController
 
         $data = $this->mapCamelToSnake($validated);
         $data = DoanhNghiepStatusHelper::applyStatus($data);
-        $doanhNghiep = DoanhNghiep::create($data);
+        $data = DoanhNghiepLoaiHinhHelper::applyLoaiHinh($data);
+        $data = DoanhNghiepNganhNgheHelper::apply($data);
 
-        if (!empty($danhSachTV)) {
-            $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
+        $user = $request->user();
+        if ($user) {
+            $data['don_vi_id'] = $user->don_vi_id;
+            $data['created_by_user_id'] = $user->id;
         }
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
+        $doanhNghiep = DinhDanhHistoryContext::run(['nguon' => 'tao_moi'], function () use ($data, $danhSachTV) {
+            $company = DoanhNghiep::create($data);
+
+            if (!empty($danhSachTV)) {
+                $this->syncMembersToCompany($company, $danhSachTV);
+            }
+
+            return $company;
+        });
+
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep),
@@ -151,7 +227,11 @@ class DoanhNghiepController extends ApiController
      */
     public function show(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
 
         return $this->success(new DoanhNghiepResource($doanhNghiep));
     }
@@ -164,18 +244,26 @@ class DoanhNghiepController extends ApiController
         $validated = $request->validated();
         $danhSachTV = $validated['danhSachThanhVienGopVon'] ?? null;
         unset($validated['danhSachThanhVienGopVon']);
-        $doanhNghiep = DoanhNghiep::find($id);
+        $doanhNghiep = DoanhNghiepScopeHelper::query($request->user())->find($id);
 
         if (!$doanhNghiep) {
             return $this->error("Not found!");
         }
 
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $data = $this->mapCamelToSnake($validated);
         $data = DoanhNghiepStatusHelper::applyStatus($data, $doanhNghiep);
+        $data = DoanhNghiepLoaiHinhHelper::applyLoaiHinh($data, $doanhNghiep);
+        $data = DoanhNghiepNganhNgheHelper::apply($data);
 
         if (!empty($data)) {
-            $doanhNghiep->update($data);
-            $doanhNghiep->save();
+            DinhDanhHistoryContext::run(['nguon' => 'cap_nhat'], function () use ($doanhNghiep, $data) {
+                $doanhNghiep->update($data);
+                $doanhNghiep->save();
+            });
         }
 
         if ($danhSachTV !== null) {
@@ -183,7 +271,7 @@ class DoanhNghiepController extends ApiController
             $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
         }
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
@@ -196,9 +284,65 @@ class DoanhNghiepController extends ApiController
      */
     public function destroy(DoanhNghiep $doanhNghiep): JsonResponse
     {
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $doanhNghiep->delete();
 
         return $this->success(null, 'Doanh nghiệp deleted successfully');
+    }
+
+    /**
+     * Bulk delete companies by id list.
+     */
+    public function bulkDestroy(): JsonResponse
+    {
+        $validated = request()->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'distinct'],
+        ]);
+
+        $deleted = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($validated['ids'] as $index => $id) {
+            $company = DoanhNghiepScopeHelper::query(request()->user())
+                ->whereKey($id)
+                ->first();
+
+            if (!$company) {
+                $failed++;
+                $errors[] = [
+                    'id' => $id,
+                    'message' => 'Doanh nghiệp không tồn tại hoặc không thuộc phạm vi đơn vị của bạn.',
+                ];
+
+                continue;
+            }
+
+            try {
+                $company->delete();
+                $deleted++;
+            } catch (\Throwable $exception) {
+                $failed++;
+                $errors[] = [
+                    'id' => $id,
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return $this->success(
+            [
+                'deleted' => $deleted,
+                'failed' => $failed,
+                'errors' => $errors,
+            ],
+            "Xóa hàng loạt hoàn tất: {$deleted} thành công, {$failed} lỗi.",
+            $deleted > 0 ? 200 : 422,
+        );
     }
 
     /**
@@ -206,12 +350,18 @@ class DoanhNghiepController extends ApiController
      */
     public function updateDinhDanh(DoanhNghiep $doanhNghiep): JsonResponse
     {
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $validated = request()->validate([
             'daCapNhatDinhDanh' => ['required', 'boolean'],
         ]);
 
-        DoanhNghiepStatusHelper::syncDinhDanhStatus($doanhNghiep, $validated['daCapNhatDinhDanh']);
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai']);
+        DinhDanhHistoryContext::run(['nguon' => 'thu_cong'], function () use ($doanhNghiep, $validated) {
+            DoanhNghiepStatusHelper::syncDinhDanhStatus($doanhNghiep, $validated['daCapNhatDinhDanh']);
+        });
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep->fresh()),
@@ -234,22 +384,26 @@ class DoanhNghiepController extends ApiController
         $failed = 0;
         $errors = [];
 
-        foreach ($validated['items'] as $index => $item) {
-            $msdn = trim((string) $item['maSoDoanhNghiep']);
-            $company = DoanhNghiep::query()->where('ma_so_doanh_nghiep', $msdn)->first();
+        DinhDanhHistoryContext::run(['nguon' => 'hang_loat'], function () use ($validated, &$updated, &$failed, &$errors) {
+            foreach ($validated['items'] as $index => $item) {
+                $msdn = trim((string) $item['maSoDoanhNghiep']);
+                $company = DoanhNghiepScopeHelper::query(request()->user())
+                    ->where('ma_so_doanh_nghiep', $msdn)
+                    ->first();
 
-            if (!$company) {
-                $failed++;
-                $errors[] = [
-                    'row' => $index + 1,
-                    'message' => "Không tìm thấy doanh nghiệp với MSDN {$msdn}.",
-                ];
-                continue;
+                if (!$company) {
+                    $failed++;
+                    $errors[] = [
+                        'row' => $index + 1,
+                        'message' => "Không tìm thấy doanh nghiệp với MSDN {$msdn}.",
+                    ];
+                    continue;
+                }
+
+                DoanhNghiepStatusHelper::syncDinhDanhStatus($company, (bool) $item['daCapNhatDinhDanh']);
+                $updated++;
             }
-
-            DoanhNghiepStatusHelper::syncDinhDanhStatus($company, (bool) $item['daCapNhatDinhDanh']);
-            $updated++;
-        }
+        });
 
         return $this->success(
             [
@@ -259,6 +413,27 @@ class DoanhNghiepController extends ApiController
                 'errors' => $errors,
             ],
             "Cập nhật định danh hàng loạt: {$updated} thành công, {$failed} lỗi."
+        );
+    }
+
+    /**
+     * Identity update history for a company.
+     */
+    public function dinhDanhLichSu(DoanhNghiep $doanhNghiep): JsonResponse
+    {
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
+        $perPage = min(max((int) request('perPage', 20), 1), 100);
+
+        $logs = $doanhNghiep->dinhDanhLichSu()
+            ->with('user:id,name,email')
+            ->paginate($perPage);
+
+        return $this->paginated(
+            DnDinhDanhLichSuResource::collection($logs),
+            'Lấy lịch sử cập nhật định danh thành công',
         );
     }
 
@@ -300,8 +475,21 @@ class DoanhNghiepController extends ApiController
      */
     private function buildFilteredQuery(): Builder
     {
-        return DoanhNghiep::query()
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai'])
+        $user = request()->user();
+        $requestedDonViId = request()->filled('donViId') ? (int) request('donViId') : null;
+        $query = DoanhNghiepScopeHelper::query($user)
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
+
+        if ($requestedDonViId !== null) {
+            $scopeDonViIds = DoanhNghiepScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
+            if ($scopeDonViIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('don_vi_id', $scopeDonViIds);
+            }
+        }
+
+        return $query
             ->when(request('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
@@ -322,7 +510,14 @@ class DoanhNghiepController extends ApiController
                 $query->where('dn_trang_thai_id', $dnTrangThaiId);
             })
             ->when(request('loaiHinhDN'), function ($query, $loaiHinhDN) {
-                $query->where('loai_hinh_dn', $loaiHinhDN);
+                $query->where(function ($builder) use ($loaiHinhDN) {
+                    $builder
+                        ->where('loai_hinh_dn', $loaiHinhDN)
+                        ->orWhereHas('dnLoaiHinh', fn ($q) => $q->where('ten', $loaiHinhDN));
+                });
+            })
+            ->when(request('loaiHinhId'), function ($query, $loaiHinhId) {
+                $query->where('dn_loai_hinh_id', $loaiHinhId);
             })
             ->when(request('loaiDN'), function ($query, $loaiDN) {
                 $query->where('loai_dn', $loaiDN);
@@ -387,6 +582,7 @@ class DoanhNghiepController extends ApiController
             'ngayCap' => 'ngay_cap',
             'ngayDangKyThayDoi' => 'ngay_dang_ky_thay_doi',
             'loaiHinhDN' => 'loai_hinh_dn',
+            'dnLoaiHinhId' => 'dn_loai_hinh_id',
             'soLuongLaoDong' => 'so_luong_lao_dong',
             'loaiDN' => 'loai_dn',
             'dsCoDong' => 'ds_co_dong',
@@ -398,5 +594,46 @@ class DoanhNghiepController extends ApiController
         }
 
         return $result;
+    }
+
+    private function userCanAccessCompany(DoanhNghiep $doanhNghiep): bool
+    {
+        return DoanhNghiepScopeHelper::userCanAccess(request()->user(), $doanhNghiep);
+    }
+
+    /**
+     * @return array<string, list<string>>|null
+     */
+    private function parseImportColumnMap(mixed $input): ?array
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return is_array($input) ? $input : null;
+    }
+
+    /**
+     * @return array<string, string|array<string, mixed>>|null
+     */
+    private function parseImportValueExtensions(mixed $input): ?array
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+
+            return is_array($decoded) && $decoded !== [] ? $decoded : null;
+        }
+
+        return is_array($input) && $input !== [] ? $input : null;
     }
 }

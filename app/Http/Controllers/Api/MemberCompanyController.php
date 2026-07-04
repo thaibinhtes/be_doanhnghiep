@@ -10,6 +10,8 @@ use App\Http\Resources\MemberResource;
 use App\Models\DoanhNghiep;
 use App\Models\Member;
 use App\Models\MemberCompany;
+use App\Models\User;
+use App\Support\DoanhNghiepScopeHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -21,13 +23,21 @@ class MemberCompanyController extends ApiController
      */
     public function index(): AnonymousResourceCollection
     {
+        $user = request()->user();
+
         $query = MemberCompany::query()
             ->with(['member', 'doanhNghiep'])
+            ->whereHas('doanhNghiep', fn ($q) => DoanhNghiepScopeHelper::applyScope($q, $user))
             ->when(request('memberId'), function ($query, $memberId) {
                 $query->where('member_id', $memberId);
             })
-            ->when(request('doanhNghiepId'), function ($query, $doanhNghiepId) {
-                $query->where('doanh_nghiep_id', $doanhNghiepId);
+            ->when(request('doanhNghiepId'), function ($query, $doanhNghiepId) use ($user) {
+                $accessibleIds = DoanhNghiepScopeHelper::filterAccessibleCompanyIds($user, [(int) $doanhNghiepId]);
+                if ($accessibleIds === []) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->where('doanh_nghiep_id', $accessibleIds[0]);
+                }
             })
             ->orderBy('created_at', 'desc');
 
@@ -42,6 +52,11 @@ class MemberCompanyController extends ApiController
      */
     public function store(StoreMemberCompanyRequest $request): JsonResponse
     {
+        $company = DoanhNghiep::query()->find($request->input('doanhNghiepId'));
+        if (!$company || !DoanhNghiepScopeHelper::userCanAccess($request->user(), $company)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $data = [
             'member_id' => $request->input('memberId'),
             'doanh_nghiep_id' => $request->input('doanhNghiepId'),
@@ -62,6 +77,10 @@ class MemberCompanyController extends ApiController
      */
     public function show(MemberCompany $memberCompany): JsonResponse
     {
+        if (!$this->userCanAccessMemberCompany($memberCompany)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $memberCompany->load(['member', 'doanhNghiep']);
 
         return $this->success(new MemberCompanyResource($memberCompany));
@@ -72,11 +91,19 @@ class MemberCompanyController extends ApiController
      */
     public function update(UpdateMemberCompanyRequest $request, MemberCompany $memberCompany): JsonResponse
     {
+        if (!$this->userCanAccessMemberCompany($memberCompany)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $data = [];
         if ($request->has('memberId')) {
             $data['member_id'] = $request->input('memberId');
         }
         if ($request->has('doanhNghiepId')) {
+            $company = DoanhNghiep::query()->find($request->input('doanhNghiepId'));
+            if (!$company || !DoanhNghiepScopeHelper::userCanAccess($request->user(), $company)) {
+                return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+            }
             $data['doanh_nghiep_id'] = $request->input('doanhNghiepId');
         }
 
@@ -94,6 +121,10 @@ class MemberCompanyController extends ApiController
      */
     public function destroy(MemberCompany $memberCompany): JsonResponse
     {
+        if (!$this->userCanAccessMemberCompany($memberCompany)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $memberCompany->delete();
 
         return $this->success(null, 'Member-Company association deleted successfully');
@@ -109,7 +140,12 @@ class MemberCompanyController extends ApiController
             'doanhNghiepIds.*' => ['integer', 'exists:doanh_nghieps,id'],
         ]);
 
-        $member->doanhNghieps()->syncWithoutDetaching($validated['doanhNghiepIds']);
+        $accessibleIds = $this->filterAccessibleCompanyIds($request->user(), $validated['doanhNghiepIds']);
+        if (count($accessibleIds) !== count($validated['doanhNghiepIds'])) {
+            return $this->error('Một hoặc nhiều doanh nghiệp không thuộc phạm vi đơn vị của bạn.', 403);
+        }
+
+        $member->doanhNghieps()->syncWithoutDetaching($accessibleIds);
         $member->load('doanhNghieps');
 
         return $this->success(
@@ -128,7 +164,12 @@ class MemberCompanyController extends ApiController
             'doanhNghiepIds.*' => ['integer', 'exists:doanh_nghieps,id'],
         ]);
 
-        $member->doanhNghieps()->detach($validated['doanhNghiepIds']);
+        $accessibleIds = $this->filterAccessibleCompanyIds($request->user(), $validated['doanhNghiepIds']);
+        if (count($accessibleIds) !== count($validated['doanhNghiepIds'])) {
+            return $this->error('Một hoặc nhiều doanh nghiệp không thuộc phạm vi đơn vị của bạn.', 403);
+        }
+
+        $member->doanhNghieps()->detach($accessibleIds);
         $member->load('doanhNghieps');
 
         return $this->success(
@@ -147,7 +188,12 @@ class MemberCompanyController extends ApiController
             'doanhNghiepIds.*' => ['integer', 'exists:doanh_nghieps,id'],
         ]);
 
-        $member->doanhNghieps()->sync($validated['doanhNghiepIds']);
+        $accessibleIds = $this->filterAccessibleCompanyIds($request->user(), $validated['doanhNghiepIds']);
+        if (count($accessibleIds) !== count($validated['doanhNghiepIds'])) {
+            return $this->error('Một hoặc nhiều doanh nghiệp không thuộc phạm vi đơn vị của bạn.', 403);
+        }
+
+        $member->doanhNghieps()->sync($accessibleIds);
         $member->load('doanhNghieps');
 
         return $this->success(
@@ -161,6 +207,10 @@ class MemberCompanyController extends ApiController
      */
     public function attachMembers(Request $request, DoanhNghiep $doanhNghiep): JsonResponse
     {
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $validated = $request->validate([
             'memberIds' => ['required', 'array'],
             'memberIds.*' => ['integer', 'exists:members,id'],
@@ -180,6 +230,10 @@ class MemberCompanyController extends ApiController
      */
     public function detachMembers(Request $request, DoanhNghiep $doanhNghiep): JsonResponse
     {
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $validated = $request->validate([
             'memberIds' => ['required', 'array'],
             'memberIds.*' => ['integer', 'exists:members,id'],
@@ -199,6 +253,10 @@ class MemberCompanyController extends ApiController
      */
     public function syncMembers(Request $request, DoanhNghiep $doanhNghiep): JsonResponse
     {
+        if (!$this->userCanAccessCompany($doanhNghiep)) {
+            return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
+        }
+
         $validated = $request->validate([
             'memberIds' => ['required', 'array'],
             'memberIds.*' => ['integer', 'exists:members,id'],
@@ -211,5 +269,30 @@ class MemberCompanyController extends ApiController
             new DoanhNghiepResource($doanhNghiep),
             'Members synced successfully'
         );
+    }
+
+    /**
+     * @param  array<int, int>  $companyIds
+     * @return array<int, int>
+     */
+    private function filterAccessibleCompanyIds(?User $user, array $companyIds): array
+    {
+        return DoanhNghiepScopeHelper::filterAccessibleCompanyIds($user, $companyIds);
+    }
+
+    private function userCanAccessCompany(DoanhNghiep $doanhNghiep): bool
+    {
+        return DoanhNghiepScopeHelper::userCanAccess(request()->user(), $doanhNghiep);
+    }
+
+    private function userCanAccessMemberCompany(MemberCompany $memberCompany): bool
+    {
+        $memberCompany->loadMissing('doanhNghiep');
+
+        if ($memberCompany->doanhNghiep === null) {
+            return false;
+        }
+
+        return $this->userCanAccessCompany($memberCompany->doanhNghiep);
     }
 }

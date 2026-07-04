@@ -3,6 +3,8 @@
 namespace App\Imports;
 
 use App\Models\DoanhNghiep;
+use App\Models\User;
+use App\Support\DoanhNghiepScopeHelper;
 use App\Support\DoanhNghiepStatusHelper;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -17,8 +19,9 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
 
     private int $failed = 0;
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly ?User $user = null,
+    ) {
         // Keep Vietnamese headings as-is.
         \Maatwebsite\Excel\Imports\HeadingRowFormatter::default('none');
     }
@@ -76,7 +79,7 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
                 continue;
             }
 
-            $company = DoanhNghiep::query()
+            $company = DoanhNghiepScopeHelper::query($this->user)
                 ->where('ma_so_doanh_nghiep', $msdn)
                 ->first();
 

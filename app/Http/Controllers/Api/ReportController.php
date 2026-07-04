@@ -20,7 +20,7 @@ class ReportController extends ApiController
 
     public function tongHop(): JsonResponse
     {
-        return $this->success($this->baoCaoService->build());
+        return $this->success($this->baoCaoService->build(request()->user()));
     }
 
     public function exportTongHop(): BinaryFileResponse
@@ -28,7 +28,7 @@ class ReportController extends ApiController
         $filename = 'bao-cao-tong-hop_' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(
-            new BaoCaoTongHopExport($this->baoCaoService),
+            new BaoCaoTongHopExport($this->baoCaoService, request()->user()),
             $filename
         );
     }
@@ -37,7 +37,7 @@ class ReportController extends ApiController
     {
         $options = $this->progressReportOptions($request);
 
-        return $this->success($this->tienDoService->build($options));
+        return $this->success($this->tienDoService->build($options, request()->user()));
     }
 
     public function exportTienDoDinhDanh(Request $request): BinaryFileResponse
@@ -46,7 +46,7 @@ class ReportController extends ApiController
         $filename = 'bao-cao-tien-do-dinh-danh_' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(
-            new BaoCaoTienDoDinhDanhExport($this->tienDoService, $options),
+            new BaoCaoTienDoDinhDanhExport($this->tienDoService, $options, request()->user()),
             $filename
         );
     }

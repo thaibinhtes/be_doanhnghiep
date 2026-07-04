@@ -14,6 +14,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RolePermissionSeeder::class);
+        $this->call(DonViSeeder::class);
+        $this->call(DoanhNghiepImportConfigSeeder::class);
+        $this->call(DoanhNghiepImportFormatSeeder::class);
         $this->call(DnTrangThaiSeeder::class);
         $this->call(ImportTemplateSettingSeeder::class);
 

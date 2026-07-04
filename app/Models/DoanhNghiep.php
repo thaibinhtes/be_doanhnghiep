@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DoanhNghiep extends Model
 {
@@ -22,6 +23,10 @@ class DoanhNghiep extends Model
         'lat',
         'quan_huyen',
         'phuong_xa',
+        'xa_phuong_cu_code',
+        'tinh_thanh_code',
+        'xa_phuong_code',
+        'hanh_chinh_synced_at',
         'von_dieu_le',
         'trang_thai',
         'dn_trang_thai_id',
@@ -39,8 +44,11 @@ class DoanhNghiep extends Model
         'ngay_cap',
         'ngay_dang_ky_thay_doi',
         'loai_hinh_dn',
+        'dn_loai_hinh_id',
         'so_luong_lao_dong',
         'loai_dn',
+        'don_vi_id',
+        'created_by_user_id',
     ];
 
     protected function casts(): array
@@ -49,9 +57,16 @@ class DoanhNghiep extends Model
             'tt' => 'integer',
             'so_luong_lao_dong' => 'integer',
             'da_cap_nhat_dinh_danh' => 'boolean',
+            'hanh_chinh_synced_at' => 'datetime',
             'long' => 'float',
             'lat' => 'float',
+            'nganh_nghe_kd' => 'array',
         ];
+    }
+
+    public function nganhNgheKdChinh(): BelongsTo
+    {
+        return $this->belongsTo(DanhMucNganhNghe::class, 'nganh_nghe_kd_chinh', 'ma');
     }
     /**
      * DoanhNghiep belongs to many Members with pivot data.
@@ -90,5 +105,25 @@ class DoanhNghiep extends Model
     public function dnTrangThai(): BelongsTo
     {
         return $this->belongsTo(DnTrangThai::class, 'dn_trang_thai_id');
+    }
+
+    public function dnLoaiHinh(): BelongsTo
+    {
+        return $this->belongsTo(DnLoaiHinh::class, 'dn_loai_hinh_id');
+    }
+
+    public function dinhDanhLichSu(): HasMany
+    {
+        return $this->hasMany(DnDinhDanhLichSu::class, 'doanh_nghiep_id')->latest();
+    }
+
+    public function donVi(): BelongsTo
+    {
+        return $this->belongsTo(DonVi::class, 'don_vi_id');
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 }

@@ -24,4 +24,11 @@ class Member extends Model
             'status' => 'boolean',
         ];
     }
+
+    public function doanhNghieps(): BelongsToMany
+    {
+        return $this->belongsToMany(DoanhNghiep::class, 'member_companies')
+            ->withPivot('date_join', 'position', 'investment_amount')
+            ->withTimestamps();
+    }
 }

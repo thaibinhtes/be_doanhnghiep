@@ -2,8 +2,16 @@
 
 namespace App\Support;
 
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+
 class DoanhNghiepExcelColumns
 {
+    /** @var list<string> */
+    private const DATE_FIELDS = [
+        'ngaySinhNguoiDaiDien',
+        'ngayCap',
+        'ngayDangKyThayDoi',
+    ];
     /**
      * Excel column definitions: camelCase key => Vietnamese heading.
      */
@@ -74,6 +82,14 @@ class DoanhNghiepExcelColumns
     }
 
     /**
+     * @return array<string, string>
+     */
+    public static function columnLabels(): array
+    {
+        return self::COLUMNS;
+    }
+
+    /**
      * Build one export row — values strictly follow COLUMNS key order.
      *
      * @return list<mixed>
@@ -94,7 +110,9 @@ class DoanhNghiepExcelColumns
             'ngaySinhNguoiDaiDien' => $model->ngay_sinh_nguoi_dai_dien ?? '',
             'chuSoHuuTen' => $model->chu_so_huu_ten ?? '',
             'nganhNgheKDChinh' => $model->nganh_nghe_kd_chinh ?? '',
-            'nganhNgheKD' => $model->nganh_nghe_kd ?? '',
+            'nganhNgheKD' => is_array($model->nganh_nghe_kd)
+                ? implode('; ', $model->nganh_nghe_kd)
+                : '',
             'ngayCap' => $model->ngay_cap ?? '',
             'ngayDangKyThayDoi' => $model->ngay_dang_ky_thay_doi ?? '',
             'loaiHinhDN' => $model->loai_hinh_dn ?? '',
@@ -178,6 +196,10 @@ class DoanhNghiepExcelColumns
                 continue;
             }
 
+            if ($value === null || $value === '') {
+                continue;
+            }
+
             $result[self::CAMEL_TO_SNAKE[$key]] = $value;
         }
 
@@ -244,6 +266,14 @@ class DoanhNghiepExcelColumns
         return $members;
     }
 
+    /**
+     * Normalize a single import field value by camelCase key.
+     */
+    public static function normalizeImportValue(string $key, mixed $value): mixed
+    {
+        return self::normalizeValue($key, $value);
+    }
+
     private static function normalizeValue(string $key, mixed $value): mixed
     {
         if ($value === null || $value === '') {
@@ -257,13 +287,41 @@ class DoanhNghiepExcelColumns
             }
         }
 
+        if (in_array($key, self::DATE_FIELDS, true)) {
+            return self::normalizeDate($value);
+        }
+
         return match ($key) {
             'tt', 'soLuongLaoDong' => is_numeric($value) ? (int) $value : null,
             'long', 'lat' => is_numeric($value) ? (float) $value : null,
             'daCapNhatDinhDanh' => self::parseBoolean($value),
             'maSoDoanhNghiep', 'vonDieuLe', 'dienThoai' => self::asString($value),
+            'nganhNgheKD' => is_string($value) ? $value : self::asString($value),
             default => is_string($value) ? $value : self::asString($value),
         };
+    }
+
+    private static function normalizeDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            $serial = (float) $value;
+
+            if ($serial >= 1000 && $serial < 1_000_000) {
+                try {
+                    return ExcelDate::excelToDateTimeObject($serial)->format('d/m/Y');
+                } catch (\Throwable) {
+                    // fall through to string coercion
+                }
+            }
+        }
+
+        $text = trim((string) $value);
+
+        return $text !== '' ? $text : null;
     }
 
     /**

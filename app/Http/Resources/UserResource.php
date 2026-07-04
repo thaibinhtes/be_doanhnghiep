@@ -14,7 +14,10 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'isActive' => (bool) $this->is_active,
+            'roleId' => $this->role_id,
+            'donViId' => $this->don_vi_id,
             'role' => new RoleResource($this->whenLoaded('role')),
+            'donVi' => new DonViResource($this->whenLoaded('donVi')),
             'permissions' => $this->when(
                 $this->relationLoaded('role') && $this->role?->relationLoaded('permissions'),
                 fn () => $this->permissionKeys()

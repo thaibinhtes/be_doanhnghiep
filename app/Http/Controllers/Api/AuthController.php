@@ -29,7 +29,7 @@ class AuthController extends ApiController
             return $this->error('Tài khoản đã bị vô hiệu hóa', 403);
         }
 
-        $user->load(['role.permissions']);
+        $user->load(['role.permissions', 'donVi']);
 
         return $this->success([
             'token' => $token,
@@ -43,7 +43,7 @@ class AuthController extends ApiController
     {
         /** @var User $user */
         $user = auth('api')->user();
-        $user->load(['role.permissions']);
+        $user->load(['role.permissions', 'donVi']);
 
         return $this->success(new UserResource($user));
     }
@@ -61,7 +61,7 @@ class AuthController extends ApiController
 
         /** @var User $user */
         $user = auth('api')->user();
-        $user->load(['role.permissions']);
+        $user->load(['role.permissions', 'donVi']);
 
         return $this->success([
             'token' => $token,

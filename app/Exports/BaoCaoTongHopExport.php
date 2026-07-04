@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Support\BaoCaoTongHopService;
+use App\Models\User;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -22,8 +23,9 @@ class BaoCaoTongHopExport implements FromArray, ShouldAutoSize, WithStyles, With
 
     public function __construct(
         private readonly BaoCaoTongHopService $service,
+        private readonly ?User $user = null,
     ) {
-        $this->report = $this->service->build();
+        $this->report = $this->service->build($this->user);
         $this->columnCount = count($this->report['columns']) + 1;
     }
 

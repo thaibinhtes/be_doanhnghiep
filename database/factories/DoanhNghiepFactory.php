@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\DanhMucNganhNghe;
 use App\Models\Member;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -17,6 +18,12 @@ class DoanhNghiepFactory extends Factory
      */
     public function definition(): array
     {
+        $industryCodes = DanhMucNganhNghe::query()->inRandomOrder()->limit(20)->pluck('ma')->all();
+        $mainCode = $industryCodes !== [] ? $this->faker->randomElement($industryCodes) : null;
+        $otherCodes = $industryCodes !== []
+            ? $this->faker->randomElements($industryCodes, min(2, count($industryCodes)))
+            : [];
+
         return [
             'tt' => $this->faker->numberBetween(1, 1000),
             'ma_so_doanh_nghiep' => $this->faker->unique()->numerify('##########'),
@@ -41,16 +48,8 @@ class DoanhNghiepFactory extends Factory
             'dien_thoai' => $this->faker->phoneNumber(),
             'chu_so_huu_id' => null,
             'nguoi_dai_dien_id' => null,
-            'nganh_nghe_kd_chinh' => $this->faker->randomElement([
-                'Thương mại', 'Công nghệ thông tin', 'Xây dựng',
-                'Vận tải', 'Dịch vụ', 'Sản xuất',
-            ]),
-            'nganh_nghe_kd' => $this->faker->randomElement([
-                'Thương mại; Dịch vụ',
-                'Công nghệ; Phần mềm',
-                'Xây dựng; Bất động sản',
-                'Vận tải; Logistics',
-            ]),
+            'nganh_nghe_kd_chinh' => $mainCode,
+            'nganh_nghe_kd' => array_values(array_unique($otherCodes)),
             'ngay_cap' => $this->faker->date('d/m/Y', '-5 years'),
             'ngay_dang_ky_thay_doi' => $this->faker->optional()->date('d/m/Y', '-1 year'),
             'loai_hinh_dn' => $this->faker->randomElement([

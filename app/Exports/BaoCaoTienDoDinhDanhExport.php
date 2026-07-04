@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Support\BaoCaoTienDoDinhDanhService;
+use App\Models\User;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -23,8 +24,9 @@ class BaoCaoTienDoDinhDanhExport implements FromArray, ShouldAutoSize, WithStyle
     public function __construct(
         private readonly BaoCaoTienDoDinhDanhService $service,
         private readonly array $options = [],
+        private readonly ?User $user = null,
     ) {
-        $this->report = $this->service->build($this->options);
+        $this->report = $this->service->build($this->options, $this->user);
         $this->lastColumnIndex = 2 + (count($this->report['ranges']) * 5) + 1;
     }
 
