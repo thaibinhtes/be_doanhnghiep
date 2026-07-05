@@ -8,6 +8,8 @@ User=root
 WorkingDirectory=/home/mobi/be_doanhnghiep
 Environment=FOREGROUND=1
 Environment=API_PORT=8000
+# Đổi nếu which php khác: /usr/bin/php8.2, /usr/bin/php8.3, ...
+Environment=PHP_BIN=/usr/bin/php8.2
 ExecStart=/bin/sh /home/mobi/be_doanhnghiep/start-api.sh
 Restart=always
 RestartSec=3

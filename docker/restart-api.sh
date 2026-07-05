@@ -17,5 +17,16 @@ if [ -f "$ROOT/docker-compose.yml" ] && command -v docker >/dev/null 2>&1; then
   fi
 fi
 
+. "$ROOT/docker/resolve-php.sh"
+if ! resolve_php_bin; then
+  if [ -f "$ROOT/docker-compose.yml" ] && command -v docker >/dev/null 2>&1; then
+    echo "Không có php host — dùng Docker deploy..."
+    sh "$ROOT/docker/deploy.sh"
+    exit $?
+  fi
+  php_not_found_help
+  exit 1
+fi
+
 echo "Khởi động API host (start-api.sh)..."
 sh "$ROOT/start-api.sh"

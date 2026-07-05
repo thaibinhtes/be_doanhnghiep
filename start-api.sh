@@ -6,6 +6,13 @@ set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+. "$ROOT/docker/resolve-php.sh"
+if ! resolve_php_bin; then
+  php_not_found_help
+  exit 1
+fi
+echo "PHP: $PHP_BIN ($("$PHP_BIN" -v 2>/dev/null | head -1))"
+
 PORT="${API_PORT:-8000}"
 PHP_INI="$ROOT/docker/php/api-runtime.ini"
 ROUTER="$ROOT/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
@@ -54,15 +61,15 @@ if lsof -i :"${PORT}" -sTCP:LISTEN 2>/dev/null | grep -q .; then
 fi
 
 echo "=== [2/4] php.ini 520M ==="
-php -c "$PHP_INI" -r "echo 'upload=' . ini_get('upload_max_filesize') . ' post=' . ini_get('post_max_size') . PHP_EOL;"
+"$PHP_BIN" -c "$PHP_INI" -r "echo 'upload=' . ini_get('upload_max_filesize') . ' post=' . ini_get('post_max_size') . PHP_EOL;"
 
 echo "=== [3/4] Start API 0.0.0.0:${PORT} ==="
 if [ "${FOREGROUND:-0}" = "1" ]; then
-  exec php -c "$PHP_INI" -S "0.0.0.0:${PORT}" -t "$ROOT/public" "$ROUTER"
+  exec "$PHP_BIN" -c "$PHP_INI" -S "0.0.0.0:${PORT}" -t "$ROOT/public" "$ROUTER"
 fi
 
 : > "$LOG_FILE"
-nohup php -c "$PHP_INI" \
+nohup "$PHP_BIN" -c "$PHP_INI" \
   -S "0.0.0.0:${PORT}" \
   -t "$ROOT/public" \
   "$ROUTER" \
