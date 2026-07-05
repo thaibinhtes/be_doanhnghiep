@@ -59,6 +59,7 @@ class PermissionRegistry
             ['key' => 'feature.cadastral.manage', 'name' => 'Quản lý mapping hành chính', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 122],
             ['key' => 'feature.business-types.manage', 'name' => 'Quản lý loại hình doanh nghiệp', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 123],
             ['key' => 'feature.industry-categories.manage', 'name' => 'Quản lý danh mục ngành nghề', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 124],
+            ['key' => 'feature.industry-categories.sync', 'name' => 'Đồng bộ danh mục ngành nghề (ROOT)', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 128],
             ['key' => 'feature.org-units.manage', 'name' => 'Quản lý đơn vị', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 125],
             ['key' => 'feature.org-units.view', 'name' => 'Xem dữ liệu theo đơn vị', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 126],
             ['key' => 'feature.users.manage', 'name' => 'Quản lý người dùng', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 127],
@@ -88,7 +89,9 @@ class PermissionRegistry
     {
         return array_values(array_filter(
             self::allKeys(),
-            fn (string $key) => !str_starts_with($key, 'menu.admin.') && $key !== 'feature.roles.manage'
+            fn (string $key) => !str_starts_with($key, 'menu.admin.')
+                && $key !== 'feature.roles.manage'
+                && $key !== 'feature.industry-categories.sync'
         ));
     }
 }

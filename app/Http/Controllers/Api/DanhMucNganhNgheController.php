@@ -2,15 +2,55 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\DanhMucNganhNgheExport;
 use App\Http\Requests\Api\StoreDanhMucNganhNgheRequest;
 use App\Http\Requests\Api\UpdateDanhMucNganhNgheRequest;
 use App\Http\Resources\DanhMucNganhNgheResource;
+use App\Imports\DanhMucNganhNgheImport;
 use App\Models\DanhMucNganhNghe;
+use App\Models\DonVi;
+use App\Support\DanhMucNganhNgheSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DanhMucNganhNgheController extends ApiController
 {
+    public function __construct(
+        private readonly DanhMucNganhNgheSyncService $syncService,
+    ) {}
+
+    public function exportCatalog(): BinaryFileResponse|JsonResponse
+    {
+        if ($response = $this->ensureRootAdmin()) {
+            return $response;
+        }
+
+        $filename = 'danh-muc-nganh-nghe_' . now()->format('Y-m-d_His') . '.xlsx';
+
+        return Excel::download(new DanhMucNganhNgheExport(), $filename);
+    }
+
+    public function importCatalog(Request $request): JsonResponse
+    {
+        if ($response = $this->ensureRootAdmin()) {
+            return $response;
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+
+        $import = new DanhMucNganhNgheImport($this->syncService);
+        Excel::import($import, $request->file('file'));
+        $result = $import->getResult();
+
+        return $this->success(
+            $result,
+            "Import danh mục ngành: {$result['imported']} mới, {$result['updated']} cập nhật, {$result['failed']} lỗi.",
+        );
+    }
     public function index(Request $request): JsonResponse
     {
         if ($request->boolean('tree')) {
@@ -179,5 +219,16 @@ class DanhMucNganhNgheController extends ApiController
             })
             ->orderBy('thu_tu')
             ->orderBy('ma');
+    }
+
+    private function ensureRootAdmin(): ?JsonResponse
+    {
+        $user = request()->user();
+
+        if (!DonVi::userBelongsToRoot($user)) {
+            return $this->error('Chỉ quản trị viên thuộc đơn vị ROOT mới được thực hiện thao tác này.', 403);
+        }
+
+        return null;
     }
 }
