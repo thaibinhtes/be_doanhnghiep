@@ -30,7 +30,7 @@ class ImportUploadValidator
             ]);
         }
 
-        $maxMb = max(1, (int) config('upload.max_mb', 520));
+        $maxMb = 520;
 
         $validator = Validator::make(
             $request->all(),

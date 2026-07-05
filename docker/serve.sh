@@ -3,16 +3,10 @@ set -e
 
 . /usr/local/bin/php-limits.sh
 
-HOST="${APP_SERVE_HOST:-0.0.0.0}"
-PORT="${APP_SERVE_PORT:-8000}"
-SERVER_ROUTER="/var/www/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
+echo "[nginx] starting php-fpm + nginx on :8000 (upload 520M)"
 
-if [ ! -f "$SERVER_ROUTER" ]; then
-  echo "ERROR: Laravel server router not found at $SERVER_ROUTER"
-  exit 1
-fi
+php-fpm -D
 
-echo "[php] starting built-in server ${HOST}:${PORT} with upload limits"
+php -r "echo '[php-fpm] upload_max_filesize=' . ini_get('upload_max_filesize') . ', post_max_size=' . ini_get('post_max_size') . PHP_EOL;"
 
-# Do NOT use "artisan serve" — its child php -S process ignores parent -d flags.
-exec php $PHP_LIMIT_FLAGS -S "${HOST}:${PORT}" -t /var/www/public "$SERVER_ROUTER"
+exec nginx -g 'daemon off;'

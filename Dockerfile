@@ -46,11 +46,26 @@ RUN chown -R www-data:www-data /var/www \
 # PHP-FPM config
 RUN sed -i 's/listen = .*/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf
 
+# PHP-FPM pool — 520M upload (cannot be overridden by .env)
+RUN { \
+    echo ''; \
+    echo '; mobi — Excel import upload limits'; \
+    echo 'php_admin_value[upload_max_filesize] = 520M'; \
+    echo 'php_admin_value[post_max_size] = 520M'; \
+    echo 'php_admin_value[max_execution_time] = 7200'; \
+    echo 'php_admin_value[max_input_time] = 7200'; \
+    echo 'php_admin_value[memory_limit] = 512M'; \
+} >> /usr/local/etc/php-fpm.d/www.conf
+
+# Remove default nginx site; use app config on port 8000
+RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf 2>/dev/null || true
+
 COPY docker/bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/entrypoint-queue.sh /usr/local/bin/entrypoint-queue.sh
 COPY docker/php-limits.sh /usr/local/bin/php-limits.sh
 COPY docker/serve.sh /usr/local/bin/serve.sh
+COPY docker/nginx/default.conf /etc/nginx/conf.d/mobi-api.conf
 COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/99-uploads.ini
 RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh /usr/local/bin/php-limits.sh /usr/local/bin/serve.sh \
     && php -i | grep -E 'upload_max_filesize|post_max_size' | head -2

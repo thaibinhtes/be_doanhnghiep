@@ -13,11 +13,9 @@ class ImportFileRules
      */
     public static function excel(): array
     {
-        $maxMb = max(1, (int) config('upload.max_mb', 520));
-
         return [
             'required',
-            File::types(['xlsx', 'xls', 'csv'])->max($maxMb * 1024),
+            File::types(['xlsx', 'xls', 'csv'])->max(520 * 1024),
         ];
     }
 }
