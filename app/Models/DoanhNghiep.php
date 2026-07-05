@@ -117,6 +117,7 @@ class DoanhNghiep extends Model
         return $this->hasMany(DnDinhDanhLichSu::class, 'doanh_nghiep_id')->latest();
     }
 
+    /** Đơn vị trực thuộc quản lý doanh nghiệp. */
     public function donVi(): BelongsTo
     {
         return $this->belongsTo(DonVi::class, 'don_vi_id');

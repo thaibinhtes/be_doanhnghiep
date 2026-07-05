@@ -13,7 +13,9 @@ use App\Imports\DoanhNghiepDinhDanhImport;
 use App\Jobs\ProcessDoanhNghiepImportJob;
 use App\Models\DoanhNghiep;
 use App\Models\DoanhNghiepImportJob;
+use App\Models\DonVi;
 use App\Models\Member;
+use App\Models\User;
 use App\Support\DinhDanhHistoryContext;
 use App\Support\DoanhNghiepExcelColumns;
 use App\Support\DoanhNghiepImportColumnMap;
@@ -114,6 +116,10 @@ class DoanhNghiepController extends ApiController
         ]);
 
         $user = request()->user();
+        if ($response = $this->ensureUserHasDonViForAssignment($user)) {
+            return $response;
+        }
+
         $startRow = request()->has('startRow')
             ? (int) request('startRow')
             : DoanhNghiepImportColumnMap::DEFAULT_START_ROW;
@@ -225,6 +231,10 @@ class DoanhNghiepController extends ApiController
         $data = DoanhNghiepNganhNgheHelper::apply($data);
 
         $user = $request->user();
+        if ($response = $this->ensureUserHasDonViForAssignment($user)) {
+            return $response;
+        }
+
         if ($user) {
             $data['don_vi_id'] = $user->don_vi_id;
             $data['created_by_user_id'] = $user->id;
@@ -462,6 +472,18 @@ class DoanhNghiepController extends ApiController
             DnDinhDanhLichSuResource::collection($logs),
             'Lấy lịch sử cập nhật định danh thành công',
         );
+    }
+
+    /**
+     * User thường phải thuộc một đơn vị để gán doanh nghiệp khi tạo/import.
+     */
+    private function ensureUserHasDonViForAssignment(?User $user): ?JsonResponse
+    {
+        if ($user === null || DonVi::userBelongsToRoot($user) || $user->don_vi_id !== null) {
+            return null;
+        }
+
+        return $this->error('Tài khoản chưa gắn đơn vị, không thể thêm doanh nghiệp.', 422);
     }
 
     /**

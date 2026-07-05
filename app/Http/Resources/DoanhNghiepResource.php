@@ -75,6 +75,10 @@ class DoanhNghiepResource extends JsonResource
             'soLuongLaoDong' => $this->so_luong_lao_dong,
             'loaiDN' => $this->loai_dn,
             'donViId' => $this->don_vi_id,
+            'donViTen' => $this->when(
+                $this->relationLoaded('donVi'),
+                fn () => $this->donVi?->ten
+            ),
             'donVi' => $this->whenLoaded('donVi', fn () => new DonViResource($this->donVi)),
             'createdByUserId' => $this->created_by_user_id,
             'createdByUser' => $this->whenLoaded('createdByUser', fn () => new UserResource($this->createdByUser)),

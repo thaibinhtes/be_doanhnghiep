@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\DoanhNghiep;
 use App\Models\DoanhNghiepImportJobRow;
+use App\Models\DonVi;
 use App\Models\Member;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
@@ -139,6 +140,17 @@ class DoanhNghiepImportProcessor
                 );
             } else {
                 if ($this->user) {
+                    if ($this->user->don_vi_id === null && !DonVi::userBelongsToRoot($this->user)) {
+                        $this->recordFailure(
+                            $rowNumber,
+                            $maSoDoanhNghiep ?: null,
+                            $tenDoanhNghiep ?: null,
+                            'Tài khoản chưa gắn đơn vị, không thể import doanh nghiệp.',
+                        );
+
+                        return;
+                    }
+
                     $snakeData['don_vi_id'] = $this->user->don_vi_id;
                     $snakeData['created_by_user_id'] = $this->user->id;
                 }
