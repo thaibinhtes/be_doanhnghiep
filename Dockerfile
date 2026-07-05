@@ -50,8 +50,9 @@ COPY docker/bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/entrypoint-queue.sh /usr/local/bin/entrypoint-queue.sh
 COPY docker/php-limits.sh /usr/local/bin/php-limits.sh
+COPY docker/serve.sh /usr/local/bin/serve.sh
 COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/99-uploads.ini
-RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh /usr/local/bin/php-limits.sh \
+RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh /usr/local/bin/php-limits.sh /usr/local/bin/serve.sh \
     && php -i | grep -E 'upload_max_filesize|post_max_size' | head -2
 
 EXPOSE 8000

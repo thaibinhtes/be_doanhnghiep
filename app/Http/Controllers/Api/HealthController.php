@@ -24,6 +24,12 @@ class HealthController extends ApiController
             'environment' => config('app.env'),
             'version' => config('app.version', '1.0.0'),
             'database' => $dbStatus,
+            'uploadMaxMb' => (int) config('upload.max_mb', 520),
+            'php' => [
+                'uploadMaxFilesize' => ini_get('upload_max_filesize'),
+                'postMaxSize' => ini_get('post_max_size'),
+                'memoryLimit' => ini_get('memory_limit'),
+            ],
             'timestamp' => now()->toIso8601String(),
         ], 'API is running');
     }
