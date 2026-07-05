@@ -3,7 +3,8 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Host :8001 — tránh xung đột php artisan serve cũ trên :8000 (limit 2M/8M)
+      - "8001:8000"
     volumes:
       - .:/var/www
     env_file: .env
