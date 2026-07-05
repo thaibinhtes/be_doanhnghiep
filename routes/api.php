@@ -99,11 +99,11 @@ Route::middleware('auth:api')->group(function () {
     });
 
     Route::get('/danh-muc-nganh', [DanhMucNganhNgheController::class, 'index']);
-    Route::get('/danh-muc-nganh/{danh_muc_nganh_nghe}', [DanhMucNganhNgheController::class, 'show']);
-    Route::middleware('permission:feature.industry-categories.sync')->group(function () {
+    Route::middleware('permission:feature.industry-categories.manage')->group(function () {
         Route::get('/danh-muc-nganh-export', [DanhMucNganhNgheController::class, 'exportCatalog']);
         Route::post('/danh-muc-nganh-import', [DanhMucNganhNgheController::class, 'importCatalog']);
     });
+    Route::get('/danh-muc-nganh/{danh_muc_nganh_nghe}', [DanhMucNganhNgheController::class, 'show']);
     Route::middleware('permission:feature.industry-categories.manage')->group(function () {
         Route::post('/danh-muc-nganh', [DanhMucNganhNgheController::class, 'store']);
         Route::put('/danh-muc-nganh/{danh_muc_nganh_nghe}', [DanhMucNganhNgheController::class, 'update']);

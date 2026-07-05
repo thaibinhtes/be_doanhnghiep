@@ -9,12 +9,12 @@ class DanhMucNganhNgheSyncService
 {
     /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array{imported: int, updated: int, failed: int, errors: array<int, array{row: int, message: string}>}
+     * @return array{imported: int, skipped: int, failed: int, errors: array<int, array{row: int, message: string}>}
      */
     public function importRows(array $rows): array
     {
         $imported = 0;
-        $updated = 0;
+        $skipped = 0;
         $failed = 0;
         $errors = [];
 
@@ -22,11 +22,14 @@ class DanhMucNganhNgheSyncService
             return [$a['cap'], $a['thu_tu'], $a['ma']] <=> [$b['cap'], $b['thu_tu'], $b['ma']];
         });
 
-        DB::transaction(function () use ($rows, &$imported, &$updated, &$failed, &$errors) {
+        DB::transaction(function () use ($rows, &$imported, &$skipped, &$failed, &$errors) {
             $idByMa = DanhMucNganhNghe::query()
                 ->pluck('id', 'ma')
                 ->map(fn ($id) => (int) $id)
                 ->all();
+
+            /** @var array<string, true> */
+            $seenInFile = [];
 
             foreach ($rows as $index => $row) {
                 $rowNumber = (int) ($row['row'] ?? ($index + 2));
@@ -46,6 +49,17 @@ class DanhMucNganhNgheSyncService
                     if ($cap < 1 || $cap > 5) {
                         throw new \InvalidArgumentException('Cấp ngành phải từ 1 đến 5.');
                     }
+
+                    $parentKey = $parentMa !== '' ? $parentMa : '__root__';
+                    $rowKey = $parentKey . '|' . $ma;
+
+                    if (isset($seenInFile[$rowKey])) {
+                        $skipped++;
+
+                        continue;
+                    }
+
+                    $seenInFile[$rowKey] = true;
 
                     $parentId = null;
                     if ($cap === 1) {
@@ -74,25 +88,22 @@ class DanhMucNganhNgheSyncService
                         ->first();
 
                     if ($existing) {
-                        $existing->update([
-                            'ten' => $ten,
-                            'thu_tu' => $thuTu,
-                            'is_active' => $isActive,
-                        ]);
                         $idByMa[$ma] = $existing->id;
-                        $updated++;
-                    } else {
-                        $created = DanhMucNganhNghe::query()->create([
-                            'parent_id' => $parentId,
-                            'cap' => $cap,
-                            'ma' => $ma,
-                            'ten' => $ten,
-                            'thu_tu' => $thuTu,
-                            'is_active' => $isActive,
-                        ]);
-                        $idByMa[$ma] = $created->id;
-                        $imported++;
+                        $skipped++;
+
+                        continue;
                     }
+
+                    $created = DanhMucNganhNghe::query()->create([
+                        'parent_id' => $parentId,
+                        'cap' => $cap,
+                        'ma' => $ma,
+                        'ten' => $ten,
+                        'thu_tu' => $thuTu,
+                        'is_active' => $isActive,
+                    ]);
+                    $idByMa[$ma] = $created->id;
+                    $imported++;
                 } catch (\Throwable $exception) {
                     $failed++;
                     $errors[] = [
@@ -105,7 +116,7 @@ class DanhMucNganhNgheSyncService
 
         return [
             'imported' => $imported,
-            'updated' => $updated,
+            'skipped' => $skipped,
             'failed' => $failed,
             'errors' => $errors,
         ];

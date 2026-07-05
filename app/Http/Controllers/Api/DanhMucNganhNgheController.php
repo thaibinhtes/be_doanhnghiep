@@ -21,12 +21,8 @@ class DanhMucNganhNgheController extends ApiController
         private readonly DanhMucNganhNgheSyncService $syncService,
     ) {}
 
-    public function exportCatalog(): BinaryFileResponse|JsonResponse
+    public function exportCatalog(): BinaryFileResponse
     {
-        if ($response = $this->ensureRootAdmin()) {
-            return $response;
-        }
-
         $filename = 'danh-muc-nganh-nghe_' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new DanhMucNganhNgheExport(), $filename);
@@ -34,10 +30,6 @@ class DanhMucNganhNgheController extends ApiController
 
     public function importCatalog(Request $request): JsonResponse
     {
-        if ($response = $this->ensureRootAdmin()) {
-            return $response;
-        }
-
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
         ]);
@@ -48,7 +40,7 @@ class DanhMucNganhNgheController extends ApiController
 
         return $this->success(
             $result,
-            "Import danh mục ngành: {$result['imported']} mới, {$result['updated']} cập nhật, {$result['failed']} lỗi.",
+            "Đồng bộ danh mục ngành: {$result['imported']} mới, {$result['skipped']} bỏ qua, {$result['failed']} lỗi.",
         );
     }
     public function index(Request $request): JsonResponse
