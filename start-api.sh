@@ -15,6 +15,7 @@ echo "PHP: $PHP_BIN ($("$PHP_BIN" -v 2>/dev/null | head -1))"
 
 PORT="${API_PORT:-8000}"
 PHP_INI="$ROOT/docker/php/api-runtime.ini"
+PUBLIC="$ROOT/public"
 ROUTER="$ROOT/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
 PID_FILE="$ROOT/storage/api-server.pid"
 LOG_FILE="$ROOT/storage/logs/api-server.log"
@@ -28,6 +29,11 @@ fi
 
 if [ ! -f "$ROUTER" ]; then
   echo "ERROR: chạy composer install (thiếu vendor/)"
+  exit 1
+fi
+
+if [ ! -f "$PUBLIC/index.php" ]; then
+  echo "ERROR: missing $PUBLIC/index.php"
   exit 1
 fi
 
@@ -63,15 +69,18 @@ fi
 echo "=== [2/4] php.ini 520M ==="
 "$PHP_BIN" -c "$PHP_INI" -r "echo 'upload=' . ini_get('upload_max_filesize') . ' post=' . ini_get('post_max_size') . PHP_EOL;"
 
-echo "=== [3/4] Start API 0.0.0.0:${PORT} ==="
+echo "=== [3/4] Start API 0.0.0.0:${PORT} (docroot ${PUBLIC}) ==="
+# server.php dùng getcwd() — phải cd public (giống php artisan serve)
+cd "$PUBLIC"
+
 if [ "${FOREGROUND:-0}" = "1" ]; then
-  exec "$PHP_BIN" -c "$PHP_INI" -S "0.0.0.0:${PORT}" -t "$ROOT/public" "$ROUTER"
+  exec "$PHP_BIN" -c "$PHP_INI" -S "0.0.0.0:${PORT}" -t "$PUBLIC" "$ROUTER"
 fi
 
 : > "$LOG_FILE"
 nohup "$PHP_BIN" -c "$PHP_INI" \
   -S "0.0.0.0:${PORT}" \
-  -t "$ROOT/public" \
+  -t "$PUBLIC" \
   "$ROUTER" \
   >> "$LOG_FILE" 2>&1 &
 
