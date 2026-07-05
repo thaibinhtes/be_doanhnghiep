@@ -49,8 +49,10 @@ RUN sed -i 's/listen = .*/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf
 COPY docker/bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/entrypoint-queue.sh /usr/local/bin/entrypoint-queue.sh
-COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
-RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh
+COPY docker/php-limits.sh /usr/local/bin/php-limits.sh
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/99-uploads.ini
+RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh /usr/local/bin/php-limits.sh \
+    && php -i | grep -E 'upload_max_filesize|post_max_size' | head -2
 
 EXPOSE 8000
 

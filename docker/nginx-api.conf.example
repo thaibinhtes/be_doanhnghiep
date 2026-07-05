@@ -25,6 +25,16 @@ server {
 }
 
 # If using PHP-FPM + nginx directly (no artisan serve):
+# Edit PHP-FPM ini then restart: sudo systemctl restart php8.2-fpm
+#
+#   upload_max_filesize = 520M
+#   post_max_size = 520M
+#   max_execution_time = 7200
+#   memory_limit = 512M
+#
+# Ubuntu paths (adjust version):
+#   /etc/php/8.2/fpm/php.ini
+#   /etc/php/8.2/cli/php.ini
 #
 # server {
 #     listen 80;

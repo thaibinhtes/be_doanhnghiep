@@ -10,6 +10,7 @@ services:
     environment:
       REDIS_HOST: redis
       SOCKET_INTERNAL_URL: http://socket:3001
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-520}
     networks:
       - default
       - mobi-net
@@ -23,6 +24,7 @@ services:
     environment:
       REDIS_HOST: redis
       SOCKET_INTERNAL_URL: http://socket:3001
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-520}
     command: ["/usr/local/bin/entrypoint-queue.sh"]
     depends_on:
       - app
