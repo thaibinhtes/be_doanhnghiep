@@ -3,10 +3,19 @@ set -e
 
 . /usr/local/bin/php-limits.sh
 
-echo "[nginx] starting php-fpm + nginx on :8000 (upload 520M)"
+HOST="${APP_SERVE_HOST:-0.0.0.0}"
+PORT="${APP_SERVE_PORT:-8000}"
+ROUTER="/var/www/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
 
-php-fpm -D
+echo "[api] starting PHP built-in server ${HOST}:${PORT} (520M upload)"
 
-php -r "echo '[php-fpm] upload_max_filesize=' . ini_get('upload_max_filesize') . ', post_max_size=' . ini_get('post_max_size') . PHP_EOL;"
-
-exec nginx -g 'daemon off;'
+# Single PHP process with -d flags — FPM/nginx-in-docker did NOT apply 520M to web requests.
+exec php \
+  -d upload_max_filesize=520M \
+  -d post_max_size=520M \
+  -d max_execution_time=7200 \
+  -d max_input_time=7200 \
+  -d memory_limit=512M \
+  -S "${HOST}:${PORT}" \
+  -t /var/www/public \
+  "$ROUTER"

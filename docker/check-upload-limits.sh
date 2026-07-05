@@ -2,7 +2,11 @@
 # Chạy trên server để chẩn đoán lỗi upload 2M/8M
 # Usage: sh docker/check-upload-limits.sh
 
-echo "=== 1. Backend trực tiếp (port 8000) ==="
+echo "=== 1. Process đang listen port 8000 (QUAN TRỌNG) ==="
+lsof -i :8000 -sTCP:LISTEN 2>/dev/null || ss -tlnp | grep 8000 || netstat -tlnp 2>/dev/null | grep 8000 || echo "(không có lsof/ss)"
+echo ""
+echo "Nếu thấy 'php artisan serve' hoặc php KHÔNG phải docker → đó là nguyên nhân limit 2M/8M"
+echo ""
 curl -s http://127.0.0.1:8000/api/health 2>/dev/null | head -c 500 || echo "FAIL: không kết nối được :8000"
 echo ""
 echo ""

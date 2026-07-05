@@ -74,7 +74,8 @@ class ImportUploadValidator
                 UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => [
                     'reason' => 'php_upload_limit',
                     'message' => sprintf(
-                        'File vượt quá giới hạn upload của PHP (upload_max_filesize=%s, post_max_size=%s).',
+                        'File vượt quá giới hạn upload PHP (upload_max_filesize=%s, post_max_size=%s). '
+                        . 'Trên server chạy: cd backend && sh docker/deploy.sh — hoặc sửa /etc/php/*/fpm/php.ini thành 520M.',
                         ini_get('upload_max_filesize'),
                         ini_get('post_max_size'),
                     ),
