@@ -12,34 +12,56 @@ ROUTER="$ROOT/vendor/laravel/framework/src/Illuminate/Foundation/resources/serve
 PID_FILE="$ROOT/storage/api-server.pid"
 LOG_FILE="$ROOT/storage/logs/api-server.log"
 
-mkdir -p storage/logs
+mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views
 
 if [ ! -f "$PHP_INI" ]; then
-  echo "ERROR: missing $PHP_INI"
+  echo "ERROR: missing $PHP_INI — git pull lại"
   exit 1
 fi
 
 if [ ! -f "$ROUTER" ]; then
-  echo "ERROR: run composer install first (missing Laravel server router)"
+  echo "ERROR: chạy composer install (thiếu vendor/)"
   exit 1
 fi
 
-echo "=== Dừng API cũ trên port ${PORT} ==="
-if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE")
-  kill "$OLD_PID" 2>/dev/null || true
-fi
-pkill -f "artisan serve" 2>/dev/null || true
-pkill -f "Illuminate/Foundation/resources/server.php" 2>/dev/null || true
-if command -v fuser >/dev/null 2>&1; then
-  fuser -k "${PORT}/tcp" 2>/dev/null || true
-fi
+stop_api() {
+  if [ -f "$PID_FILE" ]; then
+    kill "$(cat "$PID_FILE")" 2>/dev/null || true
+    rm -f "$PID_FILE"
+  fi
+  pkill -f "artisan serve" 2>/dev/null || true
+  pkill -f "Foundation/resources/server.php" 2>/dev/null || true
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${PORT}/tcp" 2>/dev/null || true
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    PIDS=$(lsof -ti :"${PORT}" 2>/dev/null || true)
+    [ -n "$PIDS" ] && kill -9 $PIDS 2>/dev/null || true
+  fi
+}
+
+echo "=== [1/4] Dừng process cũ port ${PORT} ==="
+stop_api
 sleep 2
+stop_api
+sleep 1
 
-echo "=== Verify php.ini 520M ==="
-php -c "$PHP_INI" -r "echo 'ini upload=' . ini_get('upload_max_filesize') . ' post=' . ini_get('post_max_size') . ' mem=' . ini_get('memory_limit') . PHP_EOL;"
+if lsof -i :"${PORT}" -sTCP:LISTEN 2>/dev/null | grep -q .; then
+  echo "ERROR: port ${PORT} vẫn bị chiếm:"
+  lsof -i :"${PORT}" -sTCP:LISTEN 2>/dev/null || true
+  echo "Chạy: sudo fuser -k ${PORT}/tcp"
+  exit 1
+fi
 
-echo "=== Start API :${PORT} ==="
+echo "=== [2/4] php.ini 520M ==="
+php -c "$PHP_INI" -r "echo 'upload=' . ini_get('upload_max_filesize') . ' post=' . ini_get('post_max_size') . PHP_EOL;"
+
+echo "=== [3/4] Start API 0.0.0.0:${PORT} ==="
+if [ "${FOREGROUND:-0}" = "1" ]; then
+  exec php -c "$PHP_INI" -S "0.0.0.0:${PORT}" -t "$ROOT/public" "$ROUTER"
+fi
+
+: > "$LOG_FILE"
 nohup php -c "$PHP_INI" \
   -S "0.0.0.0:${PORT}" \
   -t "$ROOT/public" \
@@ -47,19 +69,32 @@ nohup php -c "$PHP_INI" \
   >> "$LOG_FILE" 2>&1 &
 
 echo $! > "$PID_FILE"
-sleep 3
 
-echo "=== health.php ==="
-HEALTH=$(curl -sf "http://127.0.0.1:${PORT}/health.php" || echo "FAIL")
-echo "$HEALTH"
-echo ""
+echo "=== [4/4] Kiểm tra ==="
+OK=0
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 1
+  if curl -sf "http://127.0.0.1:${PORT}/health.php" >/tmp/mobi-health.json 2>/dev/null; then
+    OK=1
+    break
+  fi
+done
 
-if echo "$HEALTH" | grep -q '"upload_max_filesize": "520M"'; then
-  echo "✅ OK — API chạy 520M (PID $(cat "$PID_FILE"))"
-  echo "   Log: tail -f $LOG_FILE"
-  exit 0
+if [ "$OK" != "1" ]; then
+  echo "❌ API không phản hồi — nginx sẽ 502 Bad Gateway"
+  echo "Log:"
+  tail -30 "$LOG_FILE" 2>/dev/null || true
+  exit 1
 fi
 
-echo "❌ FAIL — vẫn chưa 520M. Log:"
-tail -20 "$LOG_FILE" 2>/dev/null || true
-exit 1
+cat /tmp/mobi-health.json
+echo ""
+echo ""
+
+if grep -q '"upload_max_filesize": "520M"' /tmp/mobi-health.json; then
+  echo "✅ API OK — 520M upload (PID $(cat "$PID_FILE"))"
+else
+  echo "⚠️  API chạy nhưng chưa 520M — xem log: tail -f $LOG_FILE"
+fi
+
+echo "Test: curl -s http://127.0.0.1:${PORT}/api/health"
