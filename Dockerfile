@@ -46,8 +46,10 @@ RUN chown -R www-data:www-data /var/www \
 # PHP-FPM config
 RUN sed -i 's/listen = .*/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf
 
+COPY docker/bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY docker/entrypoint-queue.sh /usr/local/bin/entrypoint-queue.sh
+RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh
 
 EXPOSE 8000
 

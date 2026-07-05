@@ -7,3 +7,13 @@ services:
     volumes:
       - .:/var/www
     env_file: .env
+
+  queue:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - .:/var/www
+    env_file: .env
+    command: ["/usr/local/bin/entrypoint-queue.sh"]
+    depends_on:
+      - app
