@@ -17,7 +17,8 @@ use App\Models\Member;
 use App\Support\DinhDanhHistoryContext;
 use App\Support\DoanhNghiepExcelColumns;
 use App\Support\DoanhNghiepImportColumnMap;
-use App\Support\ImportFileRules;
+use App\Support\ImportUploadLogger;
+use App\Support\ImportUploadValidator;
 use App\Support\DoanhNghiepImportExtensionHelper;
 use App\Support\DoanhNghiepLoaiHinhHelper;
 use App\Support\DoanhNghiepNganhNgheHelper;
@@ -106,8 +107,7 @@ class DoanhNghiepController extends ApiController
      */
     public function import(): JsonResponse
     {
-        request()->validate([
-            'file' => ImportFileRules::excel(),
+        ImportUploadValidator::validate(request(), 'doanh_nghiep_import', [
             'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'columnMap' => ['nullable'],
             'valueExtensions' => ['nullable'],
@@ -121,8 +121,16 @@ class DoanhNghiepController extends ApiController
         $valueExtensions = $this->parseImportValueExtensions(request()->input('valueExtensions'));
         $useColumnMap = request()->has('startRow') || $columnMap !== null || $valueExtensions !== null;
 
-        $uploadedFile = request()->file('file');
-        $storedPath = $uploadedFile->store('imports/pending');
+        try {
+            $uploadedFile = request()->file('file');
+            $storedPath = $uploadedFile->store('imports/pending');
+        } catch (\Throwable $e) {
+            ImportUploadLogger::exception('doanh_nghiep_import', request(), $e, 'store_file');
+            ImportUploadValidator::throwError(
+                'Không lưu được file upload. Kiểm tra quyền thư mục storage/app/imports.',
+                'store_failed',
+            );
+        }
 
         $importJob = DoanhNghiepImportJob::query()->create([
             'user_id' => $user->id,
@@ -137,6 +145,12 @@ class DoanhNghiepController extends ApiController
         ]);
 
         ProcessDoanhNghiepImportJob::dispatch($importJob->id);
+
+        ImportUploadLogger::succeeded('doanh_nghiep_import', request(), [
+            'import_job_id' => $importJob->id,
+            'stored_path' => $storedPath,
+            'original_filename' => $importJob->original_filename,
+        ]);
 
         ImportSocketNotifier::notify(
             $user->id,
@@ -164,16 +178,28 @@ class DoanhNghiepController extends ApiController
      */
     public function importDinhDanh(): JsonResponse
     {
-        request()->validate([
-            'file' => ImportFileRules::excel(),
+        ImportUploadValidator::validate(request(), 'doanh_nghiep_import_dinh_danh');
+
+        try {
+            $import = new DoanhNghiepDinhDanhImport(request()->user());
+            $result = DinhDanhHistoryContext::run(['nguon' => 'import'], function () use ($import) {
+                Excel::import($import, request()->file('file'));
+
+                return $import->getResult();
+            });
+        } catch (\Throwable $e) {
+            ImportUploadLogger::exception('doanh_nghiep_import_dinh_danh', request(), $e, 'excel_import');
+            ImportUploadValidator::throwError(
+                'Không đọc được file Excel: ' . $e->getMessage(),
+                'excel_read_failed',
+            );
+        }
+
+        ImportUploadLogger::succeeded('doanh_nghiep_import_dinh_danh', request(), [
+            'updated' => $result['updated'],
+            'failed' => $result['failed'],
         ]);
 
-        $import = new DoanhNghiepDinhDanhImport(request()->user());
-        $result = DinhDanhHistoryContext::run(['nguon' => 'import'], function () use ($import) {
-            Excel::import($import, request()->file('file'));
-
-            return $import->getResult();
-        });
         $total = $result['updated'];
         $statusCode = $total > 0 || $result['failed'] === 0 ? 200 : 422;
 

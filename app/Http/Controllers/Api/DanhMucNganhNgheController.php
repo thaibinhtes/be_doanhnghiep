@@ -10,7 +10,8 @@ use App\Imports\DanhMucNganhNgheImport;
 use App\Models\DanhMucNganhNghe;
 use App\Models\DonVi;
 use App\Support\DanhMucNganhNgheSyncService;
-use App\Support\ImportFileRules;
+use App\Support\ImportUploadLogger;
+use App\Support\ImportUploadValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -31,13 +32,21 @@ class DanhMucNganhNgheController extends ApiController
 
     public function importCatalog(Request $request): JsonResponse
     {
-        $request->validate([
-            'file' => ImportFileRules::excel(),
-        ]);
+        ImportUploadValidator::validate($request, 'danh_muc_nganh_import');
 
-        $import = new DanhMucNganhNgheImport($this->syncService);
-        Excel::import($import, $request->file('file'));
-        $result = $import->getResult();
+        try {
+            $import = new DanhMucNganhNgheImport($this->syncService);
+            Excel::import($import, $request->file('file'));
+            $result = $import->getResult();
+        } catch (\Throwable $e) {
+            ImportUploadLogger::exception('danh_muc_nganh_import', $request, $e, 'excel_import');
+            ImportUploadValidator::throwError(
+                'Không đọc được file Excel: ' . $e->getMessage(),
+                'excel_read_failed',
+            );
+        }
+
+        ImportUploadLogger::succeeded('danh_muc_nganh_import', $request, $result);
 
         return $this->success(
             $result,
