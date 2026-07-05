@@ -1,0 +1,20 @@
+[Unit]
+Description=Mobi QLDN API (PHP 520M upload)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/backend
+ExecStart=/usr/bin/php -d upload_max_filesize=520M -d post_max_size=520M -d max_execution_time=7200 -d memory_limit=512M -S 0.0.0.0:8000 -t public vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+# Cài đặt:
+#   sudo cp docker/mobi-api.service.example /etc/systemd/system/mobi-api.service
+#   sudo nano /etc/systemd/system/mobi-api.service   # sửa WorkingDirectory
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mobi-api

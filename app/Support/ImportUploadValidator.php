@@ -75,8 +75,7 @@ class ImportUploadValidator
                     'reason' => 'php_upload_limit',
                     'message' => sprintf(
                         'File vượt quá giới hạn upload PHP (upload_max_filesize=%s, post_max_size=%s). '
-                        . 'Nginx /api đang trỏ sai port — dùng http://127.0.0.1:8001 (Docker 520M), không phải :8000 (PHP cũ 2M). '
-                        . 'Chạy: cd backend && sh docker/deploy.sh',
+                        . 'Trên server chạy: cd backend && sudo sh docker/deploy.sh (dừng PHP cũ port 8000, start Docker 520M).',
                         ini_get('upload_max_filesize'),
                         ini_get('post_max_size'),
                     ),
