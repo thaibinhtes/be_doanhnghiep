@@ -44,7 +44,7 @@ class DoanhNghiepController extends ApiController
      */
     public function index(): AnonymousResourceCollection
     {
-        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 100);
+        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 500);
         $doanhNghieps = $this->buildFilteredQuery()->paginate($perPage);
 
         return DoanhNghiepResource::collection($doanhNghieps);
