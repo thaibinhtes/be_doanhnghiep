@@ -17,6 +17,7 @@ use App\Models\Member;
 use App\Support\DinhDanhHistoryContext;
 use App\Support\DoanhNghiepExcelColumns;
 use App\Support\DoanhNghiepImportColumnMap;
+use App\Support\ImportFileRules;
 use App\Support\DoanhNghiepImportExtensionHelper;
 use App\Support\DoanhNghiepLoaiHinhHelper;
 use App\Support\DoanhNghiepNganhNgheHelper;
@@ -106,7 +107,7 @@ class DoanhNghiepController extends ApiController
     public function import(): JsonResponse
     {
         request()->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
+            'file' => ImportFileRules::excel(),
             'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'columnMap' => ['nullable'],
             'valueExtensions' => ['nullable'],
@@ -164,7 +165,7 @@ class DoanhNghiepController extends ApiController
     public function importDinhDanh(): JsonResponse
     {
         request()->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ImportFileRules::excel(),
         ]);
 
         $import = new DoanhNghiepDinhDanhImport(request()->user());

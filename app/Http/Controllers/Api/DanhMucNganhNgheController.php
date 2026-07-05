@@ -10,6 +10,7 @@ use App\Imports\DanhMucNganhNgheImport;
 use App\Models\DanhMucNganhNghe;
 use App\Models\DonVi;
 use App\Support\DanhMucNganhNgheSyncService;
+use App\Support\ImportFileRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -31,7 +32,7 @@ class DanhMucNganhNgheController extends ApiController
     public function importCatalog(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'file' => ImportFileRules::excel(),
         ]);
 
         $import = new DanhMucNganhNgheImport($this->syncService);

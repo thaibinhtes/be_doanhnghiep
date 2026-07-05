@@ -49,6 +49,7 @@ RUN sed -i 's/listen = .*/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf
 COPY docker/bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/entrypoint-queue.sh /usr/local/bin/entrypoint-queue.sh
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 RUN chmod +x /usr/local/bin/bootstrap.sh /usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint-queue.sh
 
 EXPOSE 8000

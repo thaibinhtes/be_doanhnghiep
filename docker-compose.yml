@@ -7,6 +7,12 @@ services:
     volumes:
       - .:/var/www
     env_file: .env
+    environment:
+      REDIS_HOST: redis
+      SOCKET_INTERNAL_URL: http://socket:3001
+    networks:
+      - default
+      - mobi-net
 
   queue:
     build: .
@@ -14,6 +20,17 @@ services:
     volumes:
       - .:/var/www
     env_file: .env
+    environment:
+      REDIS_HOST: redis
+      SOCKET_INTERNAL_URL: http://socket:3001
     command: ["/usr/local/bin/entrypoint-queue.sh"]
     depends_on:
       - app
+    networks:
+      - default
+      - mobi-net
+
+networks:
+  mobi-net:
+    external: true
+    name: mobi-net
