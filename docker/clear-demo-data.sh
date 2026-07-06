@@ -8,19 +8,14 @@
 #   sh docker/clear-demo-data.sh --yes --seed # xóa + seed demo DN
 #   docker compose exec app sh docker/clear-demo-data.sh --yes
 #
-# Host (có php):
-#   sh docker/clear-demo-data.sh --yes
+# VPS không có php host — script tự chạy qua Docker nếu có docker-compose.yml.
 
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [ -f "$ROOT/docker/resolve-php.sh" ]; then
-  . "$ROOT/docker/resolve-php.sh"
-  resolve_php_bin || true
-fi
-PHP_BIN="${PHP_BIN:-php}"
+RUN_ARTISAN="sh $ROOT/docker/run-artisan.sh"
 
 CONFIRM=0
 RESEED=0
@@ -33,8 +28,8 @@ for arg in "$@"; do
 done
 
 if [ "$CONFIRM" != "1" ] && [ "${CLEAR_DEMO_DATA_YES:-}" != "1" ]; then
-  echo "⚠️  Sẽ XÓA dữ liệu demo / nghiệp vụ sau:"
-  "$PHP_BIN" artisan demo:clear --preview
+  echo "⚠️  Sẽ XÓA dữ liệu doanh nghiệp + hợp tác xã:"
+  $RUN_ARTISAN demo:clear --preview
   echo ""
   echo "Giữ nguyên: danh mục, đơn vị, users/roles, thành viên, cấu hình import."
   echo ""
@@ -43,13 +38,13 @@ if [ "$CONFIRM" != "1" ] && [ "${CLEAR_DEMO_DATA_YES:-}" != "1" ]; then
   exit 1
 fi
 
-echo "=== Xóa dữ liệu demo ==="
-"$PHP_BIN" artisan demo:clear --force
+echo "=== Xóa dữ liệu DN + HTX ==="
+$RUN_ARTISAN demo:clear --force
 
 if [ "$RESEED" = "1" ]; then
   echo ""
   echo "=== Seed lại dữ liệu demo DN ==="
-  "$PHP_BIN" artisan db:seed --class=DemoDataSeeder --force
+  $RUN_ARTISAN db:seed --class=DemoDataSeeder --force
 fi
 
 echo ""

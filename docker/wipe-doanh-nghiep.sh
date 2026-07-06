@@ -25,13 +25,12 @@ fi
 
 if [ -f "$ROOT/docker/resolve-php.sh" ]; then
   . "$ROOT/docker/resolve-php.sh"
-  resolve_php_bin || true
 fi
-PHP_BIN="${PHP_BIN:-php}"
+RUN_ARTISAN="sh $ROOT/docker/run-artisan.sh"
 
 echo "=== Xóa dữ liệu doanh nghiệp ==="
 
-"$PHP_BIN" artisan tinker --execute="
+$RUN_ARTISAN tinker --execute="
 use Illuminate\Support\Facades\DB;
 
 DB::transaction(function () {
@@ -55,4 +54,4 @@ DB::transaction(function () {
 
 echo ""
 echo "✅ Đã xóa xong. Kiểm tra:"
-"$PHP_BIN" artisan tinker --execute="echo 'doanh_nghieps=' . \App\Models\DoanhNghiep::count() . PHP_EOL;"
+$RUN_ARTISAN tinker --execute="echo 'doanh_nghieps=' . \App\Models\DoanhNghiep::count() . PHP_EOL;"
