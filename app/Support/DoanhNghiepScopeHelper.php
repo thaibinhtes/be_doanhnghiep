@@ -22,7 +22,7 @@ class DoanhNghiepScopeHelper
             return [];
         }
 
-        return DonVi::idsWithAncestorsAndDescendants((int) $user->don_vi_id);
+        return DonVi::idsWithDescendants((int) $user->don_vi_id);
     }
 
     public static function hasUnrestrictedScope(?User $user): bool
@@ -96,7 +96,7 @@ class DoanhNghiepScopeHelper
             return self::allowedDonViIds($user);
         }
 
-        $requestedIds = DonVi::idsWithAncestorsAndDescendants($requestedDonViId);
+        $requestedIds = DonVi::idsWithDescendants($requestedDonViId);
         $allowedIds = self::allowedDonViIds($user);
 
         if ($allowedIds === null) {
