@@ -13,7 +13,7 @@ class HopTacXaScopeHelper
      */
     public static function allowedDonViIds(?User $user): ?array
     {
-        if ($user === null || \App\Models\DonVi::userBelongsToRoot($user)) {
+        if ($user === null || DoanhNghiepScopeHelper::hasUnrestrictedScope($user)) {
             return null;
         }
 
@@ -21,7 +21,7 @@ class HopTacXaScopeHelper
             return [];
         }
 
-        return \App\Models\DonVi::idsWithDescendants((int) $user->don_vi_id);
+        return \App\Models\DonVi::idsWithAncestorsAndDescendants((int) $user->don_vi_id);
     }
 
     public static function query(?User $user = null): Builder
@@ -70,7 +70,7 @@ class HopTacXaScopeHelper
             return self::allowedDonViIds($user);
         }
 
-        $requestedIds = \App\Models\DonVi::idsWithDescendants($requestedDonViId);
+        $requestedIds = \App\Models\DonVi::idsWithAncestorsAndDescendants($requestedDonViId);
         $allowedIds = self::allowedDonViIds($user);
 
         if ($allowedIds === null) {

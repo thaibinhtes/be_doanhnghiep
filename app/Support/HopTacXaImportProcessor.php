@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\DonVi;
 use App\Models\HopTacXa;
 use App\Models\HopTacXaImportJobRow;
 use App\Models\User;
@@ -125,7 +124,8 @@ class HopTacXaImportProcessor
                 );
             } else {
                 if ($this->user) {
-                    if ($this->user->don_vi_id === null && !DonVi::userBelongsToRoot($this->user)) {
+                    $assignmentDonViId = DoanhNghiepScopeHelper::resolveAssignmentDonViId($this->user);
+                    if ($assignmentDonViId === null) {
                         $this->recordFailure(
                             $rowNumber,
                             $maSoThue ?: null,
@@ -136,7 +136,7 @@ class HopTacXaImportProcessor
                         return;
                     }
 
-                    $snakeData['don_vi_id'] = $this->user->don_vi_id;
+                    $snakeData['don_vi_id'] = $assignmentDonViId;
                     $snakeData['created_by_user_id'] = $this->user->id;
                 }
 

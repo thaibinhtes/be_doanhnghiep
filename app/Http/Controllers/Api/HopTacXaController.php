@@ -10,6 +10,7 @@ use App\Models\DonVi;
 use App\Models\HopTacXa;
 use App\Models\HopTacXaImportJob;
 use App\Models\User;
+use App\Support\DoanhNghiepScopeHelper;
 use App\Support\HopTacXaExcelColumns;
 use App\Support\HopTacXaImportColumnMap;
 use App\Support\HopTacXaScopeHelper;
@@ -148,7 +149,7 @@ class HopTacXaController extends ApiController
         }
 
         if ($user) {
-            $data['don_vi_id'] = $user->don_vi_id;
+            $data['don_vi_id'] = DoanhNghiepScopeHelper::resolveAssignmentDonViId($user);
             $data['created_by_user_id'] = $user->id;
         }
 
@@ -291,7 +292,7 @@ class HopTacXaController extends ApiController
 
     private function ensureUserHasDonViForAssignment(?User $user): ?JsonResponse
     {
-        if ($user === null || DonVi::userBelongsToRoot($user) || $user->don_vi_id !== null) {
+        if ($user === null || DoanhNghiepScopeHelper::hasUnrestrictedScope($user) || $user->don_vi_id !== null) {
             return null;
         }
 

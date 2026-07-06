@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\DoanhNghiep;
 use App\Models\DoanhNghiepImportJobRow;
-use App\Models\DonVi;
 use App\Models\Member;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
@@ -140,7 +139,8 @@ class DoanhNghiepImportProcessor
                 );
             } else {
                 if ($this->user) {
-                    if ($this->user->don_vi_id === null && !DonVi::userBelongsToRoot($this->user)) {
+                    $assignmentDonViId = DoanhNghiepScopeHelper::resolveAssignmentDonViId($this->user);
+                    if ($assignmentDonViId === null) {
                         $this->recordFailure(
                             $rowNumber,
                             $maSoDoanhNghiep ?: null,
@@ -151,7 +151,7 @@ class DoanhNghiepImportProcessor
                         return;
                     }
 
-                    $snakeData['don_vi_id'] = $this->user->don_vi_id;
+                    $snakeData['don_vi_id'] = $assignmentDonViId;
                     $snakeData['created_by_user_id'] = $this->user->id;
                 }
                 $doanhNghiep = DoanhNghiep::create($snakeData);

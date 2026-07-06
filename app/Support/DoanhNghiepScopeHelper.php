@@ -10,11 +10,11 @@ use Illuminate\Database\Eloquent\Builder;
 class DoanhNghiepScopeHelper
 {
     /**
-     * @return array<int, int>|null null = không giới hạn theo đơn vị (user thuộc ROOT)
+     * @return array<int, int>|null null = không giới hạn theo đơn vị
      */
     public static function allowedDonViIds(?User $user): ?array
     {
-        if ($user === null || DonVi::userBelongsToRoot($user)) {
+        if ($user === null || self::hasUnrestrictedScope($user)) {
             return null;
         }
 
@@ -22,7 +22,32 @@ class DoanhNghiepScopeHelper
             return [];
         }
 
-        return DonVi::idsWithDescendants((int) $user->don_vi_id);
+        return DonVi::idsWithAncestorsAndDescendants((int) $user->don_vi_id);
+    }
+
+    public static function hasUnrestrictedScope(?User $user): bool
+    {
+        return DonVi::userBelongsToRoot($user) || RoleHierarchyHelper::isRootUser($user);
+    }
+
+    /**
+     * Đơn vị gán khi tạo/import doanh nghiệp.
+     */
+    public static function resolveAssignmentDonViId(?User $user): ?int
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        if ($user->don_vi_id !== null) {
+            return (int) $user->don_vi_id;
+        }
+
+        if (self::hasUnrestrictedScope($user)) {
+            return DonVi::rootId();
+        }
+
+        return null;
     }
 
     public static function query(?User $user = null): Builder
@@ -71,7 +96,7 @@ class DoanhNghiepScopeHelper
             return self::allowedDonViIds($user);
         }
 
-        $requestedIds = DonVi::idsWithDescendants($requestedDonViId);
+        $requestedIds = DonVi::idsWithAncestorsAndDescendants($requestedDonViId);
         $allowedIds = self::allowedDonViIds($user);
 
         if ($allowedIds === null) {

@@ -77,6 +77,29 @@ class DonVi extends Model
         return $donVi ? $donVi->collectDescendantIds() : [$donViId];
     }
 
+    /**
+     * Đơn vị của user + tổ tiên (ROOT, …) + hậu duệ — dùng phân quyền xem DN/HTX.
+     *
+     * @return array<int, int>
+     */
+    public static function idsWithAncestorsAndDescendants(int $donViId): array
+    {
+        $ids = self::idsWithDescendants($donViId);
+        $currentId = $donViId;
+
+        while (true) {
+            $parentId = self::query()->whereKey($currentId)->value('parent_id');
+            if ($parentId === null) {
+                break;
+            }
+
+            $ids[] = (int) $parentId;
+            $currentId = (int) $parentId;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
     private static ?int $rootIdCache = null;
 
     public static function rootId(): ?int

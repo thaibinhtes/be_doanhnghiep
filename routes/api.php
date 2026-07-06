@@ -58,6 +58,7 @@ Route::middleware('auth:api')->group(function () {
     });
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard/dinh-danh-theo-ngay', [DashboardController::class, 'dinhDanhTheoNgay']);
 
     Route::get('/tinh-thanh', [TinhThanhController::class, 'index']);
     Route::get('/tinh-thanh/{code}/xa-phuong', [TinhThanhController::class, 'xaPhuong']);
