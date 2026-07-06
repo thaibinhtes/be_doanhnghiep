@@ -1,6 +1,6 @@
 #!/bin/sh
-# Xóa dữ liệu demo / nghiệp vụ (DN, HTX, thành viên, lịch sử import).
-# Giữ nguyên: users, roles, đơn vị, danh mục hệ thống, cấu hình import.
+# Chỉ xóa dữ liệu doanh nghiệp + hợp tác xã (và job import / lịch sử định danh liên quan).
+# KHÔNG xóa: danh mục, đơn vị, users/roles, thành viên, cấu hình import.
 #
 # Usage (trong thư mục backend):
 #   sh docker/clear-demo-data.sh              # xem preview
@@ -36,7 +36,7 @@ if [ "$CONFIRM" != "1" ] && [ "${CLEAR_DEMO_DATA_YES:-}" != "1" ]; then
   echo "⚠️  Sẽ XÓA dữ liệu demo / nghiệp vụ sau:"
   "$PHP_BIN" artisan demo:clear --preview
   echo ""
-  echo "Giữ nguyên: users, roles, đơn vị, danh mục, cấu hình import."
+  echo "Giữ nguyên: danh mục, đơn vị, users/roles, thành viên, cấu hình import."
   echo ""
   echo "Chạy lại với: sh docker/clear-demo-data.sh --yes"
   echo "Seed lại demo DN: sh docker/clear-demo-data.sh --yes --seed"

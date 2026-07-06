@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\DB;
 class DemoDataClearService
 {
     /**
-     * Business/demo tables cleared in FK-safe order (children first).
+     * Chỉ xóa dữ liệu doanh nghiệp + hợp tác xã (và bảng phụ trợ import/định danh).
+     * Thứ tự xóa an toàn FK: bảng con trước.
      *
      * @return list<string>
      */
@@ -22,7 +23,37 @@ class DemoDataClearService
             'dn_dinh_danh_lich_sus',
             'member_companies',
             'doanh_nghieps',
+        ];
+    }
+
+    /**
+     * Danh mục / cấu hình hệ thống — không bao giờ xóa bởi script này.
+     *
+     * @return list<string>
+     */
+    public static function preservedCatalogTables(): array
+    {
+        return [
             'members',
+            'users',
+            'roles',
+            'permissions',
+            'permission_role',
+            'don_vis',
+            'dn_trang_thais',
+            'dn_loai_hinhs',
+            'danh_muc_nganh_nghes',
+            'doanh_nghiep_import_configs',
+            'doanh_nghiep_import_formats',
+            'hop_tac_xa_import_configs',
+            'hop_tac_xa_import_formats',
+            'tinh_thanh',
+            'xa_phuong',
+            'tinh_thanh_cu',
+            'quan_huyen_cu',
+            'xa_phuong_cu',
+            'hanh_chinh_mappings',
+            'settings',
         ];
     }
 

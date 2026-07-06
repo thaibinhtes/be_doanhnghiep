@@ -44,4 +44,4 @@ Artisan::command('demo:clear {--preview : Chỉ hiển thị số bản ghi sẽ
     }
 
     return self::SUCCESS;
-})->purpose('Xóa dữ liệu demo (DN, HTX, thành viên, import jobs)');
+})->purpose('Xóa dữ liệu DN + HTX (không đụng danh mục hệ thống)');
