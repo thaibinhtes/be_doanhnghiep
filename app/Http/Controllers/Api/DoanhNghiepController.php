@@ -25,12 +25,16 @@ use App\Support\DoanhNghiepImportExtensionHelper;
 use App\Support\DoanhNghiepLoaiHinhHelper;
 use App\Support\DoanhNghiepNganhNgheHelper;
 use App\Support\DoanhNghiepScopeHelper;
+use App\Support\DonViDataClearService;
 use App\Support\DoanhNghiepStatusHelper;
+use App\Support\ImportExcelKindDetector;
+use App\Support\ImportExcelKindGuard;
 use App\Support\ImportSocketNotifier;
 use App\Support\ImportSocketTopics;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -125,6 +129,7 @@ class DoanhNghiepController extends ApiController
             : DoanhNghiepImportColumnMap::DEFAULT_START_ROW;
         $columnMap = $this->parseImportColumnMap(request()->input('columnMap'));
         $valueExtensions = $this->parseImportValueExtensions(request()->input('valueExtensions'));
+        ImportExcelKindGuard::assertDoanhNghiepColumnMap($columnMap);
         $useColumnMap = request()->has('startRow') || $columnMap !== null || $valueExtensions !== null;
 
         try {
@@ -137,6 +142,11 @@ class DoanhNghiepController extends ApiController
                 'store_failed',
             );
         }
+
+        ImportExcelKindGuard::assertExpectedKind(
+            Storage::disk('local')->path($storedPath),
+            ImportExcelKindDetector::KIND_DOANH_NGHIEP,
+        );
 
         $importJob = DoanhNghiepImportJob::query()->create([
             'user_id' => $user->id,
@@ -165,6 +175,7 @@ class DoanhNghiepController extends ApiController
             [
                 'status' => DoanhNghiepImportJob::STATUS_PENDING,
                 'originalFilename' => $importJob->original_filename,
+                'entity' => 'doanh-nghiep',
             ],
         );
 
@@ -173,6 +184,7 @@ class DoanhNghiepController extends ApiController
                 'importJobId' => $importJob->id,
                 'status' => $importJob->status,
                 'originalFilename' => $importJob->original_filename,
+                'entity' => 'doanh-nghiep',
             ],
             'Đã đưa file import vào hàng đợi. Bạn sẽ nhận thông báo khi hoàn tất.',
             202,
@@ -379,6 +391,50 @@ class DoanhNghiepController extends ApiController
             ],
             "Xóa hàng loạt hoàn tất: {$deleted} thành công, {$failed} lỗi.",
             $deleted > 0 ? 200 : 422,
+        );
+    }
+
+    public function clearByDonViPreview(): JsonResponse
+    {
+        DonViDataClearService::assertCanClearByDonVi(request()->user());
+
+        $validated = request()->validate([
+            'donViId' => ['required', 'integer', 'exists:don_vis,id'],
+        ]);
+
+        $preview = DonViDataClearService::previewDoanhNghiep((int) $validated['donViId']);
+        $donVi = DonVi::query()->find($preview['donViId']);
+
+        return $this->success([
+            'donViId' => $preview['donViId'],
+            'donViMa' => $donVi?->ma,
+            'donViTen' => $donVi?->ten,
+            'scopeDonViCount' => count($preview['donViIds']),
+            'count' => $preview['count'],
+        ]);
+    }
+
+    public function clearByDonVi(): JsonResponse
+    {
+        DonViDataClearService::assertCanClearByDonVi(request()->user());
+
+        $validated = request()->validate([
+            'donViId' => ['required', 'integer', 'exists:don_vis,id'],
+        ]);
+
+        $donViId = (int) $validated['donViId'];
+        $donVi = DonVi::query()->findOrFail($donViId);
+        $result = DonViDataClearService::clearDoanhNghiep($donViId);
+
+        return $this->success(
+            [
+                'deleted' => $result['deleted'],
+                'donViId' => $result['donViId'],
+                'donViMa' => $donVi->ma,
+                'donViTen' => $donVi->ten,
+                'scopeDonViCount' => count($result['donViIds']),
+            ],
+            "Đã xóa {$result['deleted']} doanh nghiệp thuộc đơn vị {$donVi->ma} — {$donVi->ten}.",
         );
     }
 

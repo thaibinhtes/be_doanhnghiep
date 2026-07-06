@@ -79,4 +79,9 @@ class HopTacXaScopeHelper
 
         return array_values(array_intersect($requestedIds, $allowedIds));
     }
+
+    public static function resolveAssignmentDonViId(?User $user): ?int
+    {
+        return DoanhNghiepScopeHelper::resolveAssignmentDonViId($user);
+    }
 }

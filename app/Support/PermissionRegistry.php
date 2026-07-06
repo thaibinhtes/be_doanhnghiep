@@ -21,6 +21,7 @@ class PermissionRegistry
             ['key' => 'menu.companies.identity', 'name' => 'Định danh doanh nghiệp', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/companies/identity', 'sort_order' => 12],
             ['key' => 'menu.companies.create', 'name' => 'Tạo doanh nghiệp', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/companies/create', 'sort_order' => 13],
             ['key' => 'menu.companies.statuses', 'name' => 'Trạng thái doanh nghiệp', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/companies/statuses', 'sort_order' => 14],
+            ['key' => 'menu.cooperatives.list', 'name' => 'Hợp tác xã', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/cooperatives', 'sort_order' => 15],
 
             // Menu — Thành viên
             ['key' => 'menu.members.list', 'name' => 'Danh sách thành viên', 'type' => 'menu', 'group_name' => 'Thành viên', 'path' => '/members', 'sort_order' => 20],
@@ -46,6 +47,8 @@ class PermissionRegistry
             ['key' => 'feature.companies.import', 'name' => 'Nhập Excel doanh nghiệp', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 104],
             ['key' => 'feature.companies.dinh-danh', 'name' => 'Cập nhật định danh', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 105],
             ['key' => 'feature.companies.map', 'name' => 'Cập nhật bản đồ', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 106],
+            ['key' => 'feature.cooperatives.export', 'name' => 'Xuất Excel hợp tác xã', 'type' => 'feature', 'group_name' => 'Hợp tác xã', 'path' => null, 'sort_order' => 108],
+            ['key' => 'feature.cooperatives.import', 'name' => 'Nhập Excel hợp tác xã', 'type' => 'feature', 'group_name' => 'Hợp tác xã', 'path' => null, 'sort_order' => 109],
             ['key' => 'feature.reports.export', 'name' => 'Xuất báo cáo tổng hợp', 'type' => 'feature', 'group_name' => 'Báo cáo', 'path' => null, 'sort_order' => 107],
 
             // Feature — Thành viên
@@ -81,6 +84,7 @@ class PermissionRegistry
             'menu.reports.summary',
             'menu.reports.progress',
             'menu.members.list',
+            'menu.cooperatives.list',
             'feature.org-units.view',
         ];
     }

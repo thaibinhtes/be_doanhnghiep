@@ -62,6 +62,7 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
             [
                 'status' => DoanhNghiepImportJob::STATUS_PROCESSING,
                 'originalFilename' => $importJob->original_filename,
+                'entity' => 'doanh-nghiep',
             ],
         );
 
@@ -100,6 +101,7 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
                     'status' => DoanhNghiepImportJob::STATUS_COMPLETED,
                     'result' => $result,
                     'message' => "Import hoàn tất: {$result['imported']} mới, {$duplicates} trùng, {$result['failed']} lỗi.",
+                    'entity' => 'doanh-nghiep',
                 ],
             );
         } catch (\Throwable $exception) {
@@ -120,6 +122,7 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
             [
                 'status' => DoanhNghiepImportJob::STATUS_FAILED,
                 'message' => $message,
+                'entity' => 'doanh-nghiep',
             ],
         );
     }

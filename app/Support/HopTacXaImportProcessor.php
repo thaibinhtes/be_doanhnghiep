@@ -124,7 +124,7 @@ class HopTacXaImportProcessor
                 );
             } else {
                 if ($this->user) {
-                    $assignmentDonViId = DoanhNghiepScopeHelper::resolveAssignmentDonViId($this->user);
+                    $assignmentDonViId = HopTacXaScopeHelper::resolveAssignmentDonViId($this->user);
                     if ($assignmentDonViId === null) {
                         $this->recordFailure(
                             $rowNumber,

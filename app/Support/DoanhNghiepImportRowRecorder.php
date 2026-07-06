@@ -89,6 +89,7 @@ class DoanhNghiepImportRowRecorder
                 'tenDoanhNghiep' => $tenDoanhNghiep,
                 'doanhNghiepId' => $doanhNghiepId,
                 'message' => $message,
+                'entity' => 'doanh-nghiep',
             ],
         );
     }

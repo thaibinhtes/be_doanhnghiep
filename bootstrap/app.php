@@ -20,6 +20,10 @@ if (! function_exists('importContextFromRequest')) {
     {
         $path = $request->path();
 
+        if (str_contains($path, 'hop-tac-xa/import')) {
+            return 'hop_tac_xa_import';
+        }
+
         if (str_contains($path, 'doanh-nghiep/import-dinh-danh')) {
             return 'doanh_nghiep_import_dinh_danh';
         }

@@ -11,9 +11,12 @@ use App\Models\HopTacXa;
 use App\Models\HopTacXaImportJob;
 use App\Models\User;
 use App\Support\DoanhNghiepScopeHelper;
+use App\Support\DonViDataClearService;
 use App\Support\HopTacXaExcelColumns;
 use App\Support\HopTacXaImportColumnMap;
 use App\Support\HopTacXaScopeHelper;
+use App\Support\ImportExcelKindDetector;
+use App\Support\ImportExcelKindGuard;
 use App\Support\ImportSocketNotifier;
 use App\Support\ImportSocketTopics;
 use App\Support\ImportUploadLogger;
@@ -21,6 +24,7 @@ use App\Support\ImportUploadValidator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -84,6 +88,7 @@ class HopTacXaController extends ApiController
             ? (int) request('startRow')
             : HopTacXaImportColumnMap::DEFAULT_START_ROW;
         $columnMap = $this->parseImportColumnMap(request()->input('columnMap'));
+        ImportExcelKindGuard::assertHopTacXaColumnMap($columnMap);
         $useColumnMap = request()->has('startRow') || $columnMap !== null;
 
         try {
@@ -96,6 +101,11 @@ class HopTacXaController extends ApiController
                 'store_failed',
             );
         }
+
+        ImportExcelKindGuard::assertExpectedKind(
+            Storage::disk('local')->path($storedPath),
+            ImportExcelKindDetector::KIND_HTX,
+        );
 
         $importJob = HopTacXaImportJob::query()->create([
             'user_id' => $user->id,
@@ -149,7 +159,7 @@ class HopTacXaController extends ApiController
         }
 
         if ($user) {
-            $data['don_vi_id'] = DoanhNghiepScopeHelper::resolveAssignmentDonViId($user);
+            $data['don_vi_id'] = HopTacXaScopeHelper::resolveAssignmentDonViId($user);
             $data['created_by_user_id'] = $user->id;
         }
 
@@ -225,6 +235,50 @@ class HopTacXaController extends ApiController
             'deleted' => $deleted,
             'errors' => $errors,
         ], 'Xóa hàng loạt hoàn tất');
+    }
+
+    public function clearByDonViPreview(): JsonResponse
+    {
+        DonViDataClearService::assertCanClearByDonVi(request()->user());
+
+        $validated = request()->validate([
+            'donViId' => ['required', 'integer', 'exists:don_vis,id'],
+        ]);
+
+        $preview = DonViDataClearService::previewHopTacXa((int) $validated['donViId']);
+        $donVi = DonVi::query()->find($preview['donViId']);
+
+        return $this->success([
+            'donViId' => $preview['donViId'],
+            'donViMa' => $donVi?->ma,
+            'donViTen' => $donVi?->ten,
+            'scopeDonViCount' => count($preview['donViIds']),
+            'count' => $preview['count'],
+        ]);
+    }
+
+    public function clearByDonVi(): JsonResponse
+    {
+        DonViDataClearService::assertCanClearByDonVi(request()->user());
+
+        $validated = request()->validate([
+            'donViId' => ['required', 'integer', 'exists:don_vis,id'],
+        ]);
+
+        $donViId = (int) $validated['donViId'];
+        $donVi = DonVi::query()->findOrFail($donViId);
+        $result = DonViDataClearService::clearHopTacXa($donViId);
+
+        return $this->success(
+            [
+                'deleted' => $result['deleted'],
+                'donViId' => $result['donViId'],
+                'donViMa' => $donVi->ma,
+                'donViTen' => $donVi->ten,
+                'scopeDonViCount' => count($result['donViIds']),
+            ],
+            "Đã xóa {$result['deleted']} hợp tác xã thuộc đơn vị {$donVi->ma} — {$donVi->ten}.",
+        );
     }
 
     private function buildFilteredQuery(): Builder

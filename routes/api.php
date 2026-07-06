@@ -133,6 +133,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/doanh-nghiep/import-dinh-danh', [DoanhNghiepController::class, 'importDinhDanh']);
     Route::patch('/doanh-nghiep/dinh-danh/bulk', [DoanhNghiepController::class, 'bulkUpdateDinhDanh']);
     Route::delete('/doanh-nghiep/bulk', [DoanhNghiepController::class, 'bulkDestroy']);
+    Route::get('/doanh-nghiep/clear-by-don-vi/preview', [DoanhNghiepController::class, 'clearByDonViPreview']);
+    Route::delete('/doanh-nghiep/clear-by-don-vi', [DoanhNghiepController::class, 'clearByDonVi']);
     Route::get('/doanh-nghiep/{doanhNghiep}/dinh-danh-lich-su', [DoanhNghiepController::class, 'dinhDanhLichSu']);
     Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
     Route::patch('/doanh-nghiep/{doanhNghiep}/dinh-danh', [DoanhNghiepController::class, 'updateDinhDanh']);
@@ -151,6 +153,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hop-tac-xa/import-jobs/{importJob}', [HopTacXaImportJobController::class, 'show']);
     Route::get('/hop-tac-xa/import-jobs/{importJob}/rows', [HopTacXaImportJobController::class, 'rows']);
     Route::delete('/hop-tac-xa/bulk', [HopTacXaController::class, 'bulkDestroy']);
+    Route::get('/hop-tac-xa/clear-by-don-vi/preview', [HopTacXaController::class, 'clearByDonViPreview']);
+    Route::delete('/hop-tac-xa/clear-by-don-vi', [HopTacXaController::class, 'clearByDonVi']);
     Route::apiResource('hop-tac-xa', HopTacXaController::class);
 
     Route::apiResource('members', MemberController::class);
