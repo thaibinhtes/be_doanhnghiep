@@ -10,13 +10,13 @@ class HopTacXaImportConfigSeeder extends Seeder
 {
     public function run(): void
     {
-        $defaults = HopTacXaImportColumnMap::defaultExampleFormat();
+        $defaults = HopTacXaImportColumnMap::defaultStcExampleFormat();
 
         HopTacXaImportConfig::query()->updateOrCreate(
-            ['code' => 'htx_example'],
+            ['code' => HopTacXaImportColumnMap::STC_EXAMPLE_CONFIG_CODE],
             [
-                'name' => 'Ánh xạ mẫu HTX',
-                'description' => 'Template import Excel hợp tác xã (hàng 2, cột A–Q)',
+                'name' => 'HTX STC example',
+                'description' => 'Template import Excel hợp tác xã STC (dữ liệu từ hàng 10, cột A–J/M/P–R/U–V)',
                 'start_row' => $defaults['start_row'],
                 'column_map' => $defaults['column_map'],
                 'value_extensions' => $defaults['value_extensions'],
@@ -24,5 +24,9 @@ class HopTacXaImportConfigSeeder extends Seeder
                 'sort_order' => 1,
             ],
         );
+
+        HopTacXaImportConfig::query()
+            ->where('code', 'htx_example')
+            ->update(['is_active' => false]);
     }
 }

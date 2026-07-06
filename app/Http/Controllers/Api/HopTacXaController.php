@@ -55,11 +55,14 @@ class HopTacXaController extends ApiController
 
     public function importColumnMap(): JsonResponse
     {
+        $defaults = HopTacXaImportColumnMap::defaultStcExampleFormat();
+
         return $this->success([
-            'startRow' => HopTacXaImportColumnMap::DEFAULT_START_ROW,
-            'columnMap' => HopTacXaImportColumnMap::UNIT_TEMPLATE,
+            'startRow' => $defaults['start_row'],
+            'columnMap' => HopTacXaImportColumnMap::STC_FORMAT_COLUMN_MAP,
             'columnLabels' => HopTacXaExcelColumns::columnLabels(),
             'valueExtensions' => [],
+            'defaultConfigCode' => HopTacXaImportColumnMap::STC_EXAMPLE_CONFIG_CODE,
         ]);
     }
 
@@ -100,7 +103,7 @@ class HopTacXaController extends ApiController
             'file_path' => $storedPath,
             'original_filename' => $uploadedFile->getClientOriginalName(),
             'start_row' => $startRow,
-            'column_map' => $columnMap ?? HopTacXaImportColumnMap::normalizeStoredColumnMap(HopTacXaImportColumnMap::UNIT_TEMPLATE),
+            'column_map' => $columnMap ?? HopTacXaImportColumnMap::normalizeStoredColumnMap(HopTacXaImportColumnMap::STC_FORMAT_COLUMN_MAP),
             'value_extensions' => null,
             'use_column_map' => $useColumnMap,
         ]);

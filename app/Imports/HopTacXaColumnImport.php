@@ -71,7 +71,7 @@ class HopTacXaColumnImport implements OnEachRow, WithChunkReading, WithColumnLim
 
     public function endColumn(): string
     {
-        return 'Q';
+        return HopTacXaImportColumnMap::IMPORT_END_COLUMN;
     }
 
     /**

@@ -29,18 +29,58 @@ class HopTacXaImportColumnMap
         'ghiChu' => ['Q'],
     ];
 
-    public const DEFAULT_START_ROW = 2;
+    public const DEFAULT_START_ROW = 10;
+
+    /** File STC: header hàng 7, dòng nhóm 8–9, dữ liệu từ hàng 10. */
+    public const STC_DEFAULT_START_ROW = 10;
+
+    public const STC_EXAMPLE_CONFIG_CODE = 'htx_stc_example';
+
+    /** Cột cuối khi đọc file Excel STC (A–V). */
+    public const IMPORT_END_COLUMN = 'V';
+
+    /**
+     * Format STC: cột không liên tục (A–J, M, P–R, U–V), đọc file tới cột V.
+     *
+     * @var array<string, list<string>>
+     */
+    public const STC_FORMAT_COLUMN_MAP = [
+        'tt' => ['A'],
+        'tenHtx' => ['B'],
+        'maSoThue' => ['C'],
+        'namThanhLap' => ['D'],
+        'chuTichHdqtTen' => ['E'],
+        'dienThoai' => ['F'],
+        'diaChi' => ['G'],
+        'phuongXa' => ['H'],
+        'dienTichHa' => ['I'],
+        'vonDieuLe' => ['J'],
+        'soThanhVien' => ['M'],
+        'linhVuc' => ['P'],
+        'hoatDong' => ['Q'],
+        'dsThanhVien' => ['R'],
+        'diaChiMoi' => ['U'],
+        'ghiChu' => ['V'],
+    ];
+
+    /**
+     * @return array{start_row: int, column_map: array<string, list<string>>, value_extensions: array<string, string>}
+     */
+    public static function defaultStcExampleFormat(): array
+    {
+        return [
+            'start_row' => self::STC_DEFAULT_START_ROW,
+            'column_map' => self::normalizeStoredColumnMap(self::STC_FORMAT_COLUMN_MAP),
+            'value_extensions' => [],
+        ];
+    }
 
     /**
      * @return array{start_row: int, column_map: array<string, list<string>>, value_extensions: array<string, string>}
      */
     public static function defaultExampleFormat(): array
     {
-        return [
-            'start_row' => self::DEFAULT_START_ROW,
-            'column_map' => self::normalizeStoredColumnMap(self::UNIT_TEMPLATE),
-            'value_extensions' => [],
-        ];
+        return self::defaultStcExampleFormat();
     }
 
     /**
@@ -74,7 +114,7 @@ class HopTacXaImportColumnMap
     public static function resolve(?array $customMap = null): array
     {
         if ($customMap === null || $customMap === []) {
-            return self::UNIT_TEMPLATE;
+            return self::STC_FORMAT_COLUMN_MAP;
         }
 
         $resolved = [];

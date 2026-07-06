@@ -53,7 +53,7 @@ stop_api() {
   fi
 }
 
-echo "=== [1/4] Dừng process cũ port ${PORT} ==="
+echo "=== [1/5] Dừng process cũ port ${PORT} ==="
 stop_api
 sleep 2
 stop_api
@@ -66,10 +66,19 @@ if lsof -i :"${PORT}" -sTCP:LISTEN 2>/dev/null | grep -q .; then
   exit 1
 fi
 
-echo "=== [2/4] php.ini 520M ==="
+echo "=== [2/5] php.ini 520M + Laravel cache ==="
 "$PHP_BIN" -c "$PHP_INI" -r "echo 'upload=' . ini_get('upload_max_filesize') . ' post=' . ini_get('post_max_size') . PHP_EOL;"
 
-echo "=== [3/4] Start API 0.0.0.0:${PORT} (docroot ${PUBLIC}) ==="
+cd "$ROOT"
+if [ -f "$ROOT/artisan" ]; then
+  "$PHP_BIN" -c "$PHP_INI" "$ROOT/artisan" route:clear 2>/dev/null || true
+  "$PHP_BIN" -c "$PHP_INI" "$ROOT/artisan" config:clear 2>/dev/null || true
+  if [ -f "$ROOT/vendor/autoload.php" ]; then
+    "$PHP_BIN" -c "$PHP_INI" "$ROOT/artisan" route:list --path=hop-tac-xa 2>/dev/null | head -8 || true
+  fi
+fi
+
+echo "=== [3/5] Start API 0.0.0.0:${PORT} (docroot ${PUBLIC}) ==="
 # server.php dùng getcwd() — phải cd public (giống php artisan serve)
 cd "$PUBLIC"
 
@@ -86,7 +95,7 @@ nohup "$PHP_BIN" -c "$PHP_INI" \
 
 echo $! > "$PID_FILE"
 
-echo "=== [4/4] Kiểm tra ==="
+echo "=== [4/5] Kiểm tra ==="
 OK=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
