@@ -4,13 +4,22 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\PermissionResource;
 use App\Models\Permission;
+use App\Support\RoleHierarchyHelper;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PermissionController extends ApiController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $permissions = Permission::orderBy('sort_order')->get();
+        $query = Permission::query()->orderBy('sort_order');
+
+        if (!RoleHierarchyHelper::isRootUser($request->user())) {
+            $allowed = $request->user()?->permissionKeys() ?? [];
+            $query->whereIn('key', $allowed);
+        }
+
+        $permissions = $query->get();
 
         $grouped = $permissions
             ->groupBy('group_name')

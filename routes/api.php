@@ -13,6 +13,10 @@ use App\Http\Controllers\Api\DoanhNghiepController;
 use App\Http\Controllers\Api\DoanhNghiepImportJobController;
 use App\Http\Controllers\Api\DoanhNghiepImportConfigController;
 use App\Http\Controllers\Api\DoanhNghiepImportFormatController;
+use App\Http\Controllers\Api\HopTacXaController;
+use App\Http\Controllers\Api\HopTacXaImportJobController;
+use App\Http\Controllers\Api\HopTacXaImportConfigController;
+use App\Http\Controllers\Api\HopTacXaImportFormatController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\MemberCompanyController;
 use App\Http\Controllers\Api\MemberController;
@@ -40,6 +44,7 @@ Route::middleware('auth:api')->group(function () {
     });
 
     Route::middleware('permission:feature.users.manage')->group(function () {
+        Route::get('/users/assignable-roles', [UserController::class, 'assignableRoles']);
         Route::apiResource('users', UserController::class);
     });
 
@@ -131,6 +136,22 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('doanh-nghiep', DoanhNghiepController::class);
     Route::patch('/doanh-nghiep/{doanhNghiep}/dinh-danh', [DoanhNghiepController::class, 'updateDinhDanh']);
     Route::get('/settings/company-import-docs', [SettingController::class, 'companyImportDocs']);
+
+    Route::get('/hop-tac-xa/export', [HopTacXaController::class, 'export']);
+    Route::get('/hop-tac-xa/export-template', [HopTacXaController::class, 'exportTemplate']);
+    Route::get('/hop-tac-xa/import-column-map', [HopTacXaController::class, 'importColumnMap']);
+    Route::get('/hop-tac-xa/import-configs', [HopTacXaImportConfigController::class, 'index']);
+    Route::get('/hop-tac-xa/import-formats', [HopTacXaImportFormatController::class, 'index']);
+    Route::post('/hop-tac-xa/import-formats', [HopTacXaImportFormatController::class, 'store']);
+    Route::put('/hop-tac-xa/import-formats/{importFormat}', [HopTacXaImportFormatController::class, 'update']);
+    Route::delete('/hop-tac-xa/import-formats/{importFormat}', [HopTacXaImportFormatController::class, 'destroy']);
+    Route::post('/hop-tac-xa/import', [HopTacXaController::class, 'import']);
+    Route::get('/hop-tac-xa/import-jobs', [HopTacXaImportJobController::class, 'index']);
+    Route::get('/hop-tac-xa/import-jobs/{importJob}', [HopTacXaImportJobController::class, 'show']);
+    Route::get('/hop-tac-xa/import-jobs/{importJob}/rows', [HopTacXaImportJobController::class, 'rows']);
+    Route::delete('/hop-tac-xa/bulk', [HopTacXaController::class, 'bulkDestroy']);
+    Route::apiResource('hop-tac-xa', HopTacXaController::class);
+
     Route::apiResource('members', MemberController::class);
     Route::apiResource('member-companies', MemberCompanyController::class);
 

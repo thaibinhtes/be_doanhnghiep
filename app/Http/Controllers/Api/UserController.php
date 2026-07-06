@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\Api\StoreUserRequest;
 use App\Http\Requests\Api\UpdateUserRequest;
+use App\Http\Resources\RoleResource;
 use App\Http\Resources\UserResource;
+use App\Models\Role;
 use App\Models\User;
+use App\Support\RoleHierarchyHelper;
+use App\Support\UserScopeHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,7 +17,7 @@ class UserController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $query = User::query()
+        $query = UserScopeHelper::query($request->user())
             ->with(['role', 'donVi'])
             ->orderBy('name');
 
@@ -31,7 +35,12 @@ class UserController extends ApiController
         }
 
         if ($request->filled('donViId')) {
-            $query->where('don_vi_id', (int) $request->query('donViId'));
+            $donViId = (int) $request->query('donViId');
+            $allowedIds = UserScopeHelper::allowedDonViIds($request->user());
+            if ($allowedIds !== null && !in_array($donViId, $allowedIds, true)) {
+                return $this->error('Không có quyền lọc theo đơn vị này.', 403);
+            }
+            $query->where('don_vi_id', $donViId);
         }
 
         if ($request->has('isActive')) {
@@ -49,16 +58,42 @@ class UserController extends ApiController
         );
     }
 
+    public function assignableRoles(Request $request): JsonResponse
+    {
+        $roles = RoleHierarchyHelper::assignableRolesQuery($request->user())
+            ->get();
+
+        return $this->success(
+            RoleResource::collection($roles),
+            'Lấy danh sách vai trò có thể gán thành công',
+        );
+    }
+
     public function store(StoreUserRequest $request): JsonResponse
     {
+        $actor = $request->user();
         $payload = $request->validated();
+
+        $role = isset($payload['roleId']) ? Role::query()->find($payload['roleId']) : null;
+        if ($role && !RoleHierarchyHelper::canAssignRole($actor, $role)) {
+            return $this->error('Không có quyền gán vai trò này.', 403);
+        }
+
+        $donViId = UserScopeHelper::resolveDonViIdForCreate($actor, $payload['donViId'] ?? null);
+        if (!UserScopeHelper::donViIdIsAllowed($actor, $donViId)) {
+            return $this->error('Không có quyền gán đơn vị này.', 403);
+        }
+
+        if (!RoleHierarchyHelper::isRootUser($actor) && $donViId === null) {
+            return $this->error('Tài khoản quản trị chưa gắn đơn vị, không thể tạo người dùng.', 422);
+        }
 
         $user = User::query()->create([
             'name' => $payload['name'],
             'email' => $payload['email'],
             'password' => $payload['password'],
-            'role_id' => $payload['roleId'] ?? null,
-            'don_vi_id' => $payload['donViId'] ?? null,
+            'role_id' => $role?->id,
+            'don_vi_id' => $donViId,
             'is_active' => $payload['isActive'] ?? true,
         ]);
 
@@ -67,8 +102,12 @@ class UserController extends ApiController
         return $this->success(new UserResource($user), 'Tạo người dùng thành công', 201);
     }
 
-    public function show(User $user): JsonResponse
+    public function show(Request $request, User $user): JsonResponse
     {
+        if (!RoleHierarchyHelper::canManageUser($request->user(), $user)) {
+            return $this->error('Không có quyền xem người dùng này.', 403);
+        }
+
         $user->load(['role.permissions', 'donVi']);
 
         return $this->success(new UserResource($user));
@@ -76,6 +115,12 @@ class UserController extends ApiController
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
+        $actor = $request->user();
+
+        if (!RoleHierarchyHelper::canManageUser($actor, $user)) {
+            return $this->error('Không có quyền cập nhật người dùng này.', 403);
+        }
+
         $payload = $request->validated();
         $data = [];
 
@@ -89,10 +134,22 @@ class UserController extends ApiController
             $data['password'] = $payload['password'];
         }
         if (array_key_exists('roleId', $payload)) {
-            $data['role_id'] = $payload['roleId'];
+            $role = $payload['roleId'] ? Role::query()->find($payload['roleId']) : null;
+            if ($role && !RoleHierarchyHelper::canAssignRole($actor, $role)) {
+                return $this->error('Không có quyền gán vai trò này.', 403);
+            }
+            $data['role_id'] = $role?->id;
         }
         if (array_key_exists('donViId', $payload)) {
-            $data['don_vi_id'] = $payload['donViId'];
+            if (!UserScopeHelper::canChangeDonVi($actor)) {
+                // Quản trị đơn vị không đổi đơn vị — giữ nguyên đơn vị người tạo/quản lý
+            } else {
+                $donViId = $payload['donViId'];
+                if (!UserScopeHelper::donViIdIsAllowed($actor, $donViId)) {
+                    return $this->error('Không có quyền gán đơn vị này.', 403);
+                }
+                $data['don_vi_id'] = $donViId;
+            }
         }
         if (array_key_exists('isActive', $payload)) {
             $data['is_active'] = (bool) $payload['isActive'];
@@ -108,6 +165,10 @@ class UserController extends ApiController
     {
         if ((int) $request->user()?->id === (int) $user->id) {
             return $this->error('Không thể xóa tài khoản đang đăng nhập.', 422);
+        }
+
+        if (!RoleHierarchyHelper::canManageUser($request->user(), $user)) {
+            return $this->error('Không có quyền xóa người dùng này.', 403);
         }
 
         $user->delete();

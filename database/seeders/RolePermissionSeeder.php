@@ -21,15 +21,33 @@ class RolePermissionSeeder extends Seeder
 
         $allPermissionIds = Permission::pluck('id');
 
+        $rootRole = Role::updateOrCreate(
+            ['slug' => 'root'],
+            [
+                'name' => 'ROOT',
+                'description' => 'Quản trị cấp cao nhất — toàn hệ thống',
+                'level' => 100,
+            ]
+        );
+        $rootRole->permissions()->sync($allPermissionIds);
+
         $adminRole = Role::updateOrCreate(
             ['slug' => 'admin'],
-            ['name' => 'Quản trị viên', 'description' => 'Toàn quyền hệ thống']
+            [
+                'name' => 'Quản trị đơn vị',
+                'description' => 'Quản trị trong phạm vi đơn vị',
+                'level' => 80,
+            ]
         );
         $adminRole->permissions()->sync($allPermissionIds);
 
         $editorRole = Role::updateOrCreate(
             ['slug' => 'editor'],
-            ['name' => 'Biên tập viên', 'description' => 'Quản lý doanh nghiệp và thành viên']
+            [
+                'name' => 'Biên tập viên',
+                'description' => 'Quản lý doanh nghiệp và thành viên',
+                'level' => 50,
+            ]
         );
         $editorRole->permissions()->sync(
             Permission::whereIn('key', PermissionRegistry::editorKeys())->pluck('id')
@@ -37,7 +55,11 @@ class RolePermissionSeeder extends Seeder
 
         $viewerRole = Role::updateOrCreate(
             ['slug' => 'viewer'],
-            ['name' => 'Người xem', 'description' => 'Chỉ xem danh sách']
+            [
+                'name' => 'Người xem',
+                'description' => 'Chỉ xem danh sách',
+                'level' => 10,
+            ]
         );
         $viewerRole->permissions()->sync(
             Permission::whereIn('key', PermissionRegistry::viewerKeys())->pluck('id')
@@ -48,7 +70,7 @@ class RolePermissionSeeder extends Seeder
             [
                 'name' => 'Administrator',
                 'password' => 'password',
-                'role_id' => $adminRole->id,
+                'role_id' => $rootRole->id,
                 'is_active' => true,
             ]
         );

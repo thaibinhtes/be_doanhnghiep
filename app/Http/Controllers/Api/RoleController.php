@@ -6,23 +6,29 @@ use App\Http\Resources\PermissionResource;
 use App\Http\Resources\RoleResource;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Support\RoleHierarchyHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class RoleController extends ApiController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $roles = Role::with('permissions')
+        $roles = RoleHierarchyHelper::visibleRolesQuery($request->user())
+            ->with('permissions')
             ->withCount('users')
-            ->orderBy('name')
+            ->orderByDesc('level')
             ->get();
 
         return $this->success(RoleResource::collection($roles));
     }
 
-    public function show(Role $role): JsonResponse
+    public function show(Request $request, Role $role): JsonResponse
     {
+        if (!RoleHierarchyHelper::canManageRole($request->user(), $role)) {
+            return $this->error('Không có quyền xem vai trò này.', 403);
+        }
+
         $role->load('permissions');
 
         return $this->success(new RoleResource($role));
@@ -30,12 +36,27 @@ class RoleController extends ApiController
 
     public function updatePermissions(Request $request, Role $role): JsonResponse
     {
+        $actor = $request->user();
+
+        if (!RoleHierarchyHelper::canManageRole($actor, $role)) {
+            return $this->error('Không có quyền cập nhật vai trò này.', 403);
+        }
+
         $validated = $request->validate([
             'permissionKeys' => ['required', 'array'],
             'permissionKeys.*' => ['string', 'exists:permissions,key'],
         ]);
 
-        $permissionIds = Permission::whereIn('key', $validated['permissionKeys'])->pluck('id');
+        $permissionKeys = RoleHierarchyHelper::filterGrantablePermissionKeys(
+            $actor,
+            $validated['permissionKeys'],
+        );
+
+        if ($message = RoleHierarchyHelper::assertCanGrantPermissions($actor, $permissionKeys)) {
+            return $this->error($message, 403);
+        }
+
+        $permissionIds = Permission::whereIn('key', $permissionKeys)->pluck('id');
         $role->permissions()->sync($permissionIds);
         $role->load('permissions');
 
