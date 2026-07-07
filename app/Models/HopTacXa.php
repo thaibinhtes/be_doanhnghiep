@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class HopTacXa extends Model
 {
@@ -49,5 +50,10 @@ class HopTacXa extends Model
     public function createdByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function taxManagement(): HasOne
+    {
+        return $this->hasOne(CooperativeTaxManagement::class, 'hop_tac_xa_id');
     }
 }

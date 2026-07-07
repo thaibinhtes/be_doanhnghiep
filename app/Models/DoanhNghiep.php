@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DoanhNghiep extends Model
 {
@@ -126,5 +127,10 @@ class DoanhNghiep extends Model
     public function createdByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function taxManagement(): HasOne
+    {
+        return $this->hasOne(CompanyTaxManagement::class, 'doanh_nghiep_id');
     }
 }

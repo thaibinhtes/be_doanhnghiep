@@ -1,0 +1,272 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Jobs\ProcessCompanyTaxImportJob;
+use App\Models\CompanyTaxManagement;
+use App\Models\CooperativeTaxManagement;
+use App\Models\DoanhNghiep;
+use App\Models\HopTacXa;
+use App\Models\TaxUnit;
+use App\Support\TaxExcelColumns;
+use App\Support\TaxImportColumnMap;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+
+class TaxManagementController extends ApiController
+{
+    public function companyList(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+        $fromDate = $this->parseDateOrNull($request->query('paidFrom'));
+        $toDate = $this->parseDateOrNull($request->query('paidTo'));
+
+        $query = DoanhNghiep::query()
+            ->with(['taxManagement.taxUnit', 'taxManagement.importedBy'])
+            ->orderBy('ten_doanh_nghiep');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('ten_doanh_nghiep', 'like', "%{$search}%")
+                    ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%");
+            });
+        }
+
+        if ($fromDate || $toDate) {
+            $query->whereHas('taxManagement', function ($builder) use ($fromDate, $toDate) {
+                if ($fromDate) {
+                    $builder->whereDate('tax_paid_at', '>=', $fromDate);
+                }
+                if ($toDate) {
+                    $builder->whereDate('tax_paid_at', '<=', $toDate);
+                }
+            });
+        }
+
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 200);
+        $items = $query->paginate($perPage);
+
+        $data = $items->getCollection()->map(function (DoanhNghiep $item) {
+            return [
+                'id' => $item->id,
+                'taxCode' => $item->ma_so_doanh_nghiep,
+                'companyName' => $item->ten_doanh_nghiep,
+                'taxUnitId' => $item->taxManagement?->tax_unit_id,
+                'taxUnit' => $item->taxManagement?->taxUnit ? [
+                    'id' => $item->taxManagement->taxUnit->id,
+                    'unitCode' => $item->taxManagement->taxUnit->unit_code,
+                    'unitName' => $item->taxManagement->taxUnit->unit_name,
+                ] : null,
+                'taxPaidAt' => $item->taxManagement?->tax_paid_at?->toDateString(),
+                'importedBy' => $item->taxManagement?->importedBy ? [
+                    'id' => $item->taxManagement->importedBy->id,
+                    'name' => $item->taxManagement->importedBy->name,
+                ] : null,
+            ];
+        })->values();
+
+        return $this->success([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ],
+        ], 'Lấy danh sách doanh nghiệp đóng thuế thành công');
+    }
+
+    public function cooperativeList(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        $query = HopTacXa::query()
+            ->with(['taxManagement.taxUnit'])
+            ->orderBy('ten_htx');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('ten_htx', 'like', "%{$search}%")
+                    ->orWhere('ma_so_thue', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 200);
+        $items = $query->paginate($perPage);
+
+        $data = $items->getCollection()->map(function (HopTacXa $item) {
+            return [
+                'id' => $item->id,
+                'taxCode' => $item->ma_so_thue,
+                'cooperativeName' => $item->ten_htx,
+                'taxUnitId' => $item->taxManagement?->tax_unit_id,
+                'taxUnit' => $item->taxManagement?->taxUnit ? [
+                    'id' => $item->taxManagement->taxUnit->id,
+                    'unitCode' => $item->taxManagement->taxUnit->unit_code,
+                    'unitName' => $item->taxManagement->taxUnit->unit_name,
+                ] : null,
+            ];
+        })->values();
+
+        return $this->success([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ],
+        ], 'Lấy danh sách HTX đóng thuế thành công');
+    }
+
+    public function upsertCompany(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'doanhNghiepId' => ['required', 'integer', 'exists:doanh_nghieps,id'],
+            'taxUnitId' => ['nullable', 'integer', 'exists:tax_units,id'],
+            'taxPaidAt' => ['nullable', 'date'],
+        ]);
+
+        $company = DoanhNghiep::query()->findOrFail((int) $payload['doanhNghiepId']);
+
+        if (empty($payload['taxUnitId'])) {
+            CompanyTaxManagement::query()->where('doanh_nghiep_id', $company->id)->delete();
+            $this->syncCompanyOperatingStatus($company->id);
+
+            return $this->success(null, 'Đã bỏ đơn vị thuế cho doanh nghiệp');
+        }
+
+        $taxPaidAt = $this->parseDateOrNull($payload['taxPaidAt'] ?? null) ?? now()->toDateString();
+
+        CompanyTaxManagement::query()->updateOrCreate(
+            ['doanh_nghiep_id' => $company->id],
+            [
+                'tax_code' => (string) ($company->ma_so_doanh_nghiep ?? ''),
+                'tax_unit_id' => (int) $payload['taxUnitId'],
+                'tax_paid_at' => $taxPaidAt,
+                'imported_by_user_id' => (int) $request->user()->id,
+            ],
+        );
+        $this->syncCompanyOperatingStatus($company->id);
+
+        return $this->success(null, 'Cập nhật đơn vị thuế doanh nghiệp thành công');
+    }
+
+    public function upsertCooperative(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'hopTacXaId' => ['required', 'integer', 'exists:hop_tac_xas,id'],
+            'taxUnitId' => ['nullable', 'integer', 'exists:tax_units,id'],
+        ]);
+
+        $item = HopTacXa::query()->findOrFail((int) $payload['hopTacXaId']);
+
+        if (empty($payload['taxUnitId'])) {
+            CooperativeTaxManagement::query()->where('hop_tac_xa_id', $item->id)->delete();
+
+            return $this->success(null, 'Đã bỏ đơn vị thuế cho HTX');
+        }
+
+        CooperativeTaxManagement::query()->updateOrCreate(
+            ['hop_tac_xa_id' => $item->id],
+            [
+                'tax_code' => (string) ($item->ma_so_thue ?? ''),
+                'tax_unit_id' => (int) $payload['taxUnitId'],
+            ],
+        );
+
+        return $this->success(null, 'Cập nhật đơn vị thuế HTX thành công');
+    }
+
+    public function companyImportColumnMap(): JsonResponse
+    {
+        return $this->success([
+            'startRow' => TaxImportColumnMap::DEFAULT_START_ROW,
+            'columnMap' => TaxImportColumnMap::COMPANY_TAX_COLUMN_MAP,
+            'columnLabels' => TaxExcelColumns::companyTaxColumnLabels(),
+            'valueExtensions' => [],
+        ]);
+    }
+
+    public function importCompanyExcel(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+        ]);
+
+        $startRow = $request->has('startRow') ? (int) $request->input('startRow') : TaxImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
+
+        $uploadedFile = $request->file('file');
+        $storedPath = $uploadedFile->store('imports/pending');
+
+        $importJob = TaxImportJob::query()->create([
+            'user_id' => (int) $request->user()->id,
+            'status' => TaxImportJob::STATUS_PENDING,
+            'type' => TaxImportJob::TYPE_COMPANY_TAX,
+            'file_path' => $storedPath,
+            'original_filename' => $uploadedFile->getClientOriginalName(),
+            'start_row' => $startRow,
+            'column_map' => $columnMap,
+        ]);
+
+        ProcessCompanyTaxImportJob::dispatch($importJob->id);
+
+        return $this->success([
+            'importJobId' => $importJob->id,
+            'status' => $importJob->status,
+            'originalFilename' => $importJob->original_filename,
+            'entity' => 'company-tax',
+        ], 'Đã đưa file import doanh nghiệp đóng thuế vào hàng đợi.', 202);
+    }
+
+    private function syncCompanyOperatingStatus(int $companyId): void
+    {
+        $hasTaxRecord = CompanyTaxManagement::query()
+            ->where('doanh_nghiep_id', $companyId)
+            ->exists();
+
+        DoanhNghiep::query()
+            ->where('id', $companyId)
+            ->update([
+                'trang_thai' => $hasTaxRecord ? 'Hoạt động' : 'Không hoạt động',
+            ]);
+    }
+
+    private function parseDateOrNull(mixed $value): ?string
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array<string, list<string>>|null
+     */
+    private function parseImportColumnMap(mixed $input): ?array
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return is_array($input) ? $input : null;
+    }
+}

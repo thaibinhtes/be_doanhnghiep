@@ -28,6 +28,8 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\TinhThanhController;
+use App\Http\Controllers\Api\TaxManagementController;
+use App\Http\Controllers\Api\TaxUnitController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'check']);
@@ -175,6 +177,22 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hop-tac-xa/clear-by-don-vi/preview', [HopTacXaController::class, 'clearByDonViPreview']);
     Route::delete('/hop-tac-xa/clear-by-don-vi', [HopTacXaController::class, 'clearByDonVi']);
     Route::apiResource('hop-tac-xa', HopTacXaController::class);
+
+    Route::get('/tax-units', [TaxUnitController::class, 'index']);
+    Route::get('/tax-units/import-column-map', [TaxUnitController::class, 'importColumnMap']);
+    Route::get('/tax-management/companies', [TaxManagementController::class, 'companyList']);
+    Route::get('/tax-management/companies/import-column-map', [TaxManagementController::class, 'companyImportColumnMap']);
+    Route::get('/tax-management/cooperatives', [TaxManagementController::class, 'cooperativeList']);
+    Route::middleware('permission:feature.org-units.manage')->group(function () {
+        Route::post('/tax-units', [TaxUnitController::class, 'store']);
+        Route::post('/tax-units/import-excel', [TaxUnitController::class, 'importExcel']);
+        Route::put('/tax-units/{taxUnit}', [TaxUnitController::class, 'update']);
+        Route::patch('/tax-units/{taxUnit}', [TaxUnitController::class, 'update']);
+        Route::delete('/tax-units/{taxUnit}', [TaxUnitController::class, 'destroy']);
+        Route::post('/tax-management/companies', [TaxManagementController::class, 'upsertCompany']);
+        Route::post('/tax-management/companies/import-excel', [TaxManagementController::class, 'importCompanyExcel']);
+        Route::post('/tax-management/cooperatives', [TaxManagementController::class, 'upsertCooperative']);
+    });
 
     Route::apiResource('members', MemberController::class);
     Route::apiResource('member-companies', MemberCompanyController::class);
