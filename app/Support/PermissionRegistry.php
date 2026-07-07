@@ -14,6 +14,7 @@ class PermissionRegistry
         return [
             // Menu — Tổng quan
             ['key' => 'menu.dashboard', 'name' => 'Dashboard', 'type' => 'menu', 'group_name' => 'Tổng quan', 'path' => '/dashboard', 'sort_order' => 1],
+            ['key' => 'menu.import-history', 'name' => 'Danh mục lịch sử', 'type' => 'menu', 'group_name' => 'Tổng quan', 'path' => '/admin/import-history', 'sort_order' => 2],
 
             // Menu — Doanh nghiệp
             ['key' => 'menu.companies.list', 'name' => 'Danh sách doanh nghiệp', 'type' => 'menu', 'group_name' => 'Quản lý doanh nghiệp', 'path' => '/companies', 'sort_order' => 10],
@@ -38,7 +39,6 @@ class PermissionRegistry
             ['key' => 'menu.admin.industry-categories', 'name' => 'Danh mục ngành nghề', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/industry-categories', 'sort_order' => 33],
             ['key' => 'menu.admin.org-units', 'name' => 'Quản lý đơn vị', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/org-units', 'sort_order' => 34],
             ['key' => 'menu.admin.users', 'name' => 'Quản lý người dùng', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/users', 'sort_order' => 35],
-            ['key' => 'menu.import-history', 'name' => 'Danh mục lịch sử import', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/import-history', 'sort_order' => 36],
 
             // Feature — Doanh nghiệp
             ['key' => 'feature.companies.create', 'name' => 'Tạo doanh nghiệp', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 100],
