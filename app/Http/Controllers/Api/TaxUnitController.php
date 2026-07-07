@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Imports\TaxUnitColumnImport;
 use App\Jobs\ProcessTaxUnitImportJob;
 use App\Http\Resources\TaxUnitResource;
 use App\Models\TaxImportJob;
@@ -11,8 +10,6 @@ use App\Support\TaxExcelColumns;
 use App\Support\TaxImportColumnMap;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 
 class TaxUnitController extends ApiController
 {
@@ -100,15 +97,6 @@ class TaxUnitController extends ApiController
         $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
         $uploadedFile = $request->file('file');
         $storedPath = $uploadedFile->store('imports/pending');
-
-        // quick validation to fail early on empty/invalid sheet
-        $preview = new TaxUnitColumnImport($startRow, $columnMap);
-        Excel::import($preview, Storage::disk('local')->path($storedPath));
-        if ($preview->rows() === []) {
-            Storage::disk('local')->delete($storedPath);
-
-            return $this->error('Không đọc được dữ liệu từ file Excel hoặc file rỗng.', 422);
-        }
 
         $importJob = TaxImportJob::query()->create([
             'user_id' => (int) $request->user()->id,
