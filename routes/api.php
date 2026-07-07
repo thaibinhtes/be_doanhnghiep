@@ -142,6 +142,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/doanh-nghiep/export-template', [DoanhNghiepController::class, 'exportTemplate']);
     Route::get('/doanh-nghiep/export-template-dinh-danh', [DoanhNghiepController::class, 'exportIdentityTemplate']);
     Route::get('/doanh-nghiep/import-column-map', [DoanhNghiepController::class, 'importColumnMap']);
+    Route::get('/doanh-nghiep/import-dinh-danh-column-map', [DoanhNghiepController::class, 'importDinhDanhColumnMap']);
     Route::get('/doanh-nghiep/import-configs', [DoanhNghiepImportConfigController::class, 'index']);
     Route::get('/doanh-nghiep/import-formats', [DoanhNghiepImportFormatController::class, 'index']);
     Route::post('/doanh-nghiep/import-formats', [DoanhNghiepImportFormatController::class, 'store']);
@@ -181,7 +182,9 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/tax-units', [TaxUnitController::class, 'index']);
     Route::get('/tax-units/import-column-map', [TaxUnitController::class, 'importColumnMap']);
     Route::get('/tax-management/companies', [TaxManagementController::class, 'companyList']);
+    Route::get('/tax-management/companies/{doanhNghiep}/payment-history', [TaxManagementController::class, 'companyPaymentHistory']);
     Route::get('/tax-management/companies/import-column-map', [TaxManagementController::class, 'companyImportColumnMap']);
+    Route::get('/tax-management/tax-units/{taxUnit}/companies', [TaxManagementController::class, 'companiesByTaxUnit']);
     Route::get('/tax-management/cooperatives', [TaxManagementController::class, 'cooperativeList']);
     Route::middleware('permission:feature.org-units.manage')->group(function () {
         Route::post('/tax-units', [TaxUnitController::class, 'store']);

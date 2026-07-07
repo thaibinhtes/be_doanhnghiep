@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Imports\CompanyTaxColumnImport;
 use App\Models\CompanyTaxManagement;
+use App\Models\CompanyTaxPaymentHistory;
 use App\Models\DoanhNghiep;
 use App\Models\TaxImportJob;
 use App\Models\TaxUnit;
@@ -77,7 +78,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
             $created = 0;
             $updated = 0;
             $skipped = 0;
-            $today = now()->toDateString();
+            $paidAt = $importJob->tax_paid_at?->toDateString() ?? now()->toDateString();
 
             $import = new CompanyTaxColumnImport(
                 $startRow,
@@ -85,7 +86,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                 function (array $row, int $excelRow) use (
                     $user,
                     $importJob,
-                    $today,
+                    $paidAt,
                     &$created,
                     &$updated,
                     &$skipped
@@ -136,10 +137,18 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                     [
                         'tax_code' => $taxCode,
                         'tax_unit_id' => $taxUnit->id,
-                        'tax_paid_at' => $today,
+                        'tax_paid_at' => $paidAt,
                         'imported_by_user_id' => $user->id,
                     ],
                 );
+                CompanyTaxPaymentHistory::query()->create([
+                    'doanh_nghiep_id' => $company->id,
+                    'tax_unit_id' => $taxUnit->id,
+                    'tax_code' => $taxCode,
+                    'tax_paid_at' => $paidAt,
+                    'imported_by_user_id' => $user->id,
+                    'source' => 'import',
+                ]);
 
                 $this->syncCompanyOperatingStatus($company->id);
                 $existing ? $updated++ : $created++;

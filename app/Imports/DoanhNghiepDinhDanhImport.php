@@ -3,14 +3,20 @@
 namespace App\Imports;
 
 use App\Models\DoanhNghiep;
+use App\Models\DoanhNghiepImportJobRow;
 use App\Models\User;
+use App\Support\DinhDanhHistoryContext;
+use App\Support\DoanhNghiepDinhDanhImportColumnMap;
+use App\Support\DoanhNghiepImportRowRecorder;
 use App\Support\DoanhNghiepScopeHelper;
 use App\Support\DoanhNghiepStatusHelper;
-use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\ToCollection;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\OnEachRow;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithColumnLimit;
+use Maatwebsite\Excel\Concerns\WithStartRow;
+use Maatwebsite\Excel\Row;
 
-class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
+class DoanhNghiepDinhDanhImport implements OnEachRow, WithChunkReading, WithColumnLimit, WithStartRow
 {
     /** @var array<int, array{row: int, message: string}> */
     private array $errors = [];
@@ -19,82 +25,84 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
 
     private int $failed = 0;
 
+    private ?DoanhNghiepImportRowRecorder $rowRecorder = null;
+
+    /** @var array<string, list<string>> */
+    private readonly array $columnMap;
+
     public function __construct(
         private readonly ?User $user = null,
+        private readonly int $dataStartRow = DoanhNghiepDinhDanhImportColumnMap::DEFAULT_START_ROW,
+        ?array $columnMap = null,
+        private readonly ?bool $forcedDinhDanhStatus = null,
+        private readonly ?int $importJobId = null,
     ) {
-        // Keep Vietnamese headings as-is.
-        \Maatwebsite\Excel\Imports\HeadingRowFormatter::default('none');
-    }
-
-    public function headingRow(): int
-    {
-        return 1;
-    }
-
-    public function collection(Collection $rows): void
-    {
-        foreach ($rows as $index => $row) {
-            $rowNumber = $index + 2;
-            $raw = $row->toArray();
-
-            $msdn = trim((string) ($this->pickValue($raw, [
-                'mã số doanh nghiệp',
-                'ma so doanh nghiep',
-                'ma_so_doanh_nghiep',
-                'mã số dn',
-                'ma so dn',
-            ]) ?? ''));
-            $tenDoanhNghiep = trim((string) ($this->pickValue($raw, [
-                'tên doanh nghiệp',
-                'ten doanh nghiep',
-                'ten_doanh_nghiep',
-            ]) ?? ''));
-            $dinhDanhValue = $this->pickValue($raw, [
-                'định danh',
-                'dinh danh',
-                'trạng thái định danh',
-                'trang thai dinh danh',
-            ]);
-
-            if ($msdn === '' && $tenDoanhNghiep === '' && ($dinhDanhValue === null || $dinhDanhValue === '')) {
-                continue;
-            }
-
-            if ($msdn === '') {
-                $this->failed++;
-                $this->errors[] = [
-                    'row' => $rowNumber,
-                    'message' => 'Thiếu mã số doanh nghiệp.',
-                ];
-                continue;
-            }
-
-            $daCapNhatDinhDanh = $this->parseDinhDanhValue($dinhDanhValue);
-            if ($daCapNhatDinhDanh === null) {
-                $this->failed++;
-                $this->errors[] = [
-                    'row' => $rowNumber,
-                    'message' => 'Giá trị cột "định danh" không hợp lệ. Chỉ chấp nhận integer: 1 (định danh) hoặc 0 (chưa định danh).',
-                ];
-                continue;
-            }
-
-            $company = DoanhNghiepScopeHelper::query($this->user)
-                ->where('ma_so_doanh_nghiep', $msdn)
-                ->first();
-
-            if (!$company) {
-                $this->failed++;
-                $this->errors[] = [
-                    'row' => $rowNumber,
-                    'message' => "Không tìm thấy doanh nghiệp với MSDN {$msdn}.",
-                ];
-                continue;
-            }
-
-            DoanhNghiepStatusHelper::syncDinhDanhStatus($company, $daCapNhatDinhDanh);
-            $this->updated++;
+        $this->columnMap = DoanhNghiepDinhDanhImportColumnMap::resolve($columnMap);
+        if ($this->importJobId !== null && $this->user !== null) {
+            $this->rowRecorder = new DoanhNghiepImportRowRecorder($this->importJobId, $this->user->id);
         }
+    }
+
+    public function onRow(Row $row): void
+    {
+        $rowNumber = $row->getIndex();
+        $parsed = DoanhNghiepDinhDanhImportColumnMap::parseRow(
+            $row->toArray(null, false, false, $this->endColumn()),
+            $this->columnMap,
+        );
+
+        if (DoanhNghiepDinhDanhImportColumnMap::isEmptyRow($parsed)) {
+            return;
+        }
+
+        $msdn = trim((string) ($parsed['maSoDoanhNghiep'] ?? ''));
+        $tenDoanhNghiep = trim((string) ($parsed['tenDoanhNghiep'] ?? ''));
+        $daCapNhatDinhDanh = $this->forcedDinhDanhStatus;
+
+        if ($msdn === '') {
+            $this->recordFailure($rowNumber, null, $tenDoanhNghiep ?: null, 'Thiếu mã số doanh nghiệp.');
+
+            return;
+        }
+
+        if (!is_bool($daCapNhatDinhDanh)) {
+            $this->recordFailure(
+                $rowNumber,
+                $msdn,
+                $tenDoanhNghiep ?: null,
+                'Thiếu trạng thái định danh import. Vui lòng chọn Định danh hoặc Chưa định danh.',
+            );
+
+            return;
+        }
+
+        $company = DoanhNghiepScopeHelper::query($this->user)
+            ->where('ma_so_doanh_nghiep', $msdn)
+            ->first();
+
+        if (!$company) {
+            $this->recordFailure($rowNumber, $msdn, $tenDoanhNghiep ?: null, "Không tìm thấy doanh nghiệp với MSDN {$msdn}.");
+
+            return;
+        }
+
+        DinhDanhHistoryContext::run(
+            [
+                'nguon' => 'import',
+                'ghi_chu' => "Import định danh dòng {$rowNumber}",
+            ],
+            fn () => DoanhNghiepStatusHelper::syncDinhDanhStatus($company, $daCapNhatDinhDanh),
+        );
+
+        $this->updated++;
+        $this->rowRecorder?->record(
+            $rowNumber,
+            DoanhNghiepImportJobRow::STATUS_SUCCESS,
+            $msdn,
+            $company->ten_doanh_nghiep,
+            $company->id,
+            'Cập nhật định danh thành công.',
+        );
     }
 
     /**
@@ -102,6 +110,8 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
      */
     public function getResult(): array
     {
+        $this->rowRecorder?->flush();
+
         return [
             'imported' => 0,
             'updated' => $this->updated,
@@ -110,31 +120,36 @@ class DoanhNghiepDinhDanhImport implements ToCollection, WithHeadingRow
         ];
     }
 
-    /**
-     * @param  array<string, mixed>  $row
-     * @param  array<int, string>  $keys
-     */
-    private function pickValue(array $row, array $keys): mixed
+    public function chunkSize(): int
     {
-        foreach ($keys as $key) {
-            if (array_key_exists($key, $row)) {
-                return $row[$key];
-            }
-        }
-
-        return null;
+        return 500;
     }
 
-    private function parseDinhDanhValue(mixed $value): ?bool
+    public function startRow(): int
     {
-        if ($value === 1 || $value === '1') {
-            return true;
-        }
+        return $this->dataStartRow;
+    }
 
-        if ($value === 0 || $value === '0') {
-            return false;
-        }
+    public function endColumn(): string
+    {
+        return 'Z';
+    }
 
-        return null;
+    private function recordFailure(int $rowNumber, ?string $msdn, ?string $tenDoanhNghiep, string $message): void
+    {
+        $this->failed++;
+        $this->errors[] = [
+            'row' => $rowNumber,
+            'message' => $message,
+        ];
+
+        $this->rowRecorder?->record(
+            $rowNumber,
+            DoanhNghiepImportJobRow::STATUS_FAILED,
+            $msdn,
+            $tenDoanhNghiep,
+            null,
+            $message,
+        );
     }
 }

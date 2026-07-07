@@ -22,6 +22,7 @@ class TaxImportJob extends Model
         'file_path',
         'original_filename',
         'start_row',
+        'tax_paid_at',
         'column_map',
         'result',
         'error_message',
@@ -34,6 +35,7 @@ class TaxImportJob extends Model
         return [
             'column_map' => 'array',
             'result' => 'array',
+            'tax_paid_at' => 'date',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];

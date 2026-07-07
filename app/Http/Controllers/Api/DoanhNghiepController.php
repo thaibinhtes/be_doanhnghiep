@@ -9,14 +9,15 @@ use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
 use App\Http\Resources\DnDinhDanhLichSuResource;
 use App\Http\Resources\DoanhNghiepResource;
-use App\Imports\DoanhNghiepDinhDanhImport;
 use App\Jobs\ProcessDoanhNghiepImportJob;
+use App\Jobs\ProcessDoanhNghiepIdentityImportJob;
 use App\Models\DoanhNghiep;
 use App\Models\DoanhNghiepImportJob;
 use App\Models\DonVi;
 use App\Models\Member;
 use App\Models\User;
 use App\Support\DinhDanhHistoryContext;
+use App\Support\DoanhNghiepDinhDanhImportColumnMap;
 use App\Support\DoanhNghiepExcelColumns;
 use App\Support\DoanhNghiepImportColumnMap;
 use App\Support\ImportUploadLogger;
@@ -35,7 +36,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DoanhNghiepController extends ApiController
@@ -196,36 +196,73 @@ class DoanhNghiepController extends ApiController
      */
     public function importDinhDanh(): JsonResponse
     {
-        ImportUploadValidator::validate(request(), 'doanh_nghiep_import_dinh_danh');
+        ImportUploadValidator::validate(request(), 'doanh_nghiep_import_dinh_danh', [
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+            'daCapNhatDinhDanh' => ['required', 'boolean'],
+        ]);
+
+        $startRow = request()->has('startRow')
+            ? (int) request('startRow')
+            : DoanhNghiepDinhDanhImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = DoanhNghiepDinhDanhImportColumnMap::normalizeStoredColumnMap(
+            $this->parseImportColumnMap(request()->input('columnMap')) ?? DoanhNghiepDinhDanhImportColumnMap::DEFAULT_COLUMN_MAP
+        );
+        $forcedDinhDanhStatus = filter_var(request()->input('daCapNhatDinhDanh'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
         try {
-            $import = new DoanhNghiepDinhDanhImport(request()->user());
-            $result = DinhDanhHistoryContext::run(['nguon' => 'import'], function () use ($import) {
-                Excel::import($import, request()->file('file'));
-
-                return $import->getResult();
-            });
+            $uploadedFile = request()->file('file');
+            $storedPath = $uploadedFile->store('imports/pending');
         } catch (\Throwable $e) {
-            ImportUploadLogger::exception('doanh_nghiep_import_dinh_danh', request(), $e, 'excel_import');
+            ImportUploadLogger::exception('doanh_nghiep_import_dinh_danh', request(), $e, 'store_file');
             ImportUploadValidator::throwError(
-                'Không đọc được file Excel: ' . $e->getMessage(),
-                'excel_read_failed',
+                'Không lưu được file upload. Kiểm tra quyền thư mục storage/app/imports.',
+                'store_failed',
             );
         }
 
+        $importJob = DoanhNghiepImportJob::query()->create([
+            'user_id' => request()->user()->id,
+            'status' => DoanhNghiepImportJob::STATUS_PENDING,
+            'type' => DoanhNghiepImportJob::TYPE_IDENTITIES,
+            'file_path' => $storedPath,
+            'original_filename' => $uploadedFile->getClientOriginalName(),
+            'start_row' => $startRow,
+            'column_map' => $columnMap,
+            'use_column_map' => true,
+        ]);
+        ProcessDoanhNghiepIdentityImportJob::dispatch($importJob->id, (bool) $forcedDinhDanhStatus);
+
         ImportUploadLogger::succeeded('doanh_nghiep_import_dinh_danh', request(), [
-            'updated' => $result['updated'],
-            'failed' => $result['failed'],
+            'import_job_id' => $importJob->id,
+            'stored_path' => $storedPath,
+            'original_filename' => $importJob->original_filename,
         ]);
 
-        $total = $result['updated'];
-        $statusCode = $total > 0 || $result['failed'] === 0 ? 200 : 422;
-
         return $this->success(
-            $result,
-            "Import định danh hoàn tất: {$result['updated']} cập nhật, {$result['failed']} lỗi.",
-            $statusCode
+            [
+                'importJobId' => $importJob->id,
+                'status' => $importJob->status,
+                'originalFilename' => $importJob->original_filename,
+                'entity' => 'doanh-nghiep',
+            ],
+            'Đã đưa file import định danh vào hàng đợi. Bạn sẽ nhận thông báo khi hoàn tất.',
+            202
         );
+    }
+
+    /**
+     * Default mapping for identity import.
+     */
+    public function importDinhDanhColumnMap(): JsonResponse
+    {
+        return $this->success([
+            'startRow' => DoanhNghiepDinhDanhImportColumnMap::DEFAULT_START_ROW,
+            'columnMap' => DoanhNghiepDinhDanhImportColumnMap::DEFAULT_COLUMN_MAP,
+            'columnLabels' => [
+                'maSoDoanhNghiep' => DoanhNghiepExcelColumns::COLUMNS['maSoDoanhNghiep'],
+            ],
+        ]);
     }
 
     /**

@@ -17,6 +17,7 @@ class DoanhNghiepImportJob extends Model
     public const STATUS_FAILED = 'failed';
 
     public const TYPE_COMPANIES = 'companies';
+    public const TYPE_IDENTITIES = 'identities';
 
     protected $fillable = [
         'user_id',

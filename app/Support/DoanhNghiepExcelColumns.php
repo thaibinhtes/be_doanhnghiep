@@ -352,11 +352,11 @@ class DoanhNghiepExcelColumns
 
         $normalized = mb_strtolower(trim((string) $value));
 
-        if (in_array($normalized, ['1', 'true', 'có', 'co', 'đã đăng ký định danh', 'da dang ky dinh danh', 'x'], true)) {
+        if (in_array($normalized, ['1', 'true', 'có', 'co', 'đã đăng ký định danh', 'da dang ky dinh danh', 'định danh', 'dinh danh', 'x'], true)) {
             return true;
         }
 
-        if (in_array($normalized, ['0', 'false', 'không', 'khong', 'chưa đăng ký định danh', 'chua dang ky dinh danh', ''], true)) {
+        if (in_array($normalized, ['0', 'false', 'không', 'khong', 'chưa đăng ký định danh', 'chua dang ky dinh danh', 'chưa định danh', 'chua dinh danh', ''], true)) {
             return false;
         }
 

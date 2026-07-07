@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Jobs\ProcessCompanyTaxImportJob;
 use App\Models\CompanyTaxManagement;
+use App\Models\CompanyTaxPaymentHistory;
 use App\Models\CooperativeTaxManagement;
 use App\Models\DoanhNghiep;
 use App\Models\HopTacXa;
@@ -151,9 +152,96 @@ class TaxManagementController extends ApiController
                 'imported_by_user_id' => (int) $request->user()->id,
             ],
         );
+        CompanyTaxPaymentHistory::query()->create([
+            'doanh_nghiep_id' => $company->id,
+            'tax_unit_id' => (int) $payload['taxUnitId'],
+            'tax_code' => (string) ($company->ma_so_doanh_nghiep ?? ''),
+            'tax_paid_at' => $taxPaidAt,
+            'imported_by_user_id' => (int) $request->user()->id,
+            'source' => 'manual',
+        ]);
         $this->syncCompanyOperatingStatus($company->id);
 
         return $this->success(null, 'Cập nhật đơn vị thuế doanh nghiệp thành công');
+    }
+
+    public function companyPaymentHistory(DoanhNghiep $doanhNghiep, Request $request): JsonResponse
+    {
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 20)), 1), 200);
+        $items = CompanyTaxPaymentHistory::query()
+            ->with(['taxUnit', 'importedBy'])
+            ->where('doanh_nghiep_id', $doanhNghiep->id)
+            ->orderByDesc('tax_paid_at')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return $this->success([
+            'data' => $items->getCollection()->map(function (CompanyTaxPaymentHistory $item) {
+                return [
+                    'id' => $item->id,
+                    'taxCode' => $item->tax_code,
+                    'taxPaidAt' => $item->tax_paid_at?->toDateString(),
+                    'source' => $item->source,
+                    'taxUnit' => $item->taxUnit ? [
+                        'id' => $item->taxUnit->id,
+                        'unitCode' => $item->taxUnit->unit_code,
+                        'unitName' => $item->taxUnit->unit_name,
+                    ] : null,
+                    'importedBy' => $item->importedBy ? [
+                        'id' => $item->importedBy->id,
+                        'name' => $item->importedBy->name,
+                    ] : null,
+                    'createdAt' => $item->created_at?->toIso8601String(),
+                ];
+            })->values(),
+            'meta' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ],
+        ], 'Lấy lịch sử đóng thuế thành công');
+    }
+
+    public function companiesByTaxUnit(TaxUnit $taxUnit, Request $request): JsonResponse
+    {
+        $fromDate = $this->parseDateOrNull($request->query('paidFrom'));
+        $toDate = $this->parseDateOrNull($request->query('paidTo'));
+
+        $query = CompanyTaxManagement::query()
+            ->with(['doanhNghiep', 'importedBy'])
+            ->where('tax_unit_id', $taxUnit->id);
+
+        if ($fromDate) {
+            $query->whereDate('tax_paid_at', '>=', $fromDate);
+        }
+        if ($toDate) {
+            $query->whereDate('tax_paid_at', '<=', $toDate);
+        }
+
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 200);
+        $items = $query->orderByDesc('tax_paid_at')->paginate($perPage);
+
+        return $this->success([
+            'data' => $items->getCollection()->map(function (CompanyTaxManagement $item) {
+                return [
+                    'id' => $item->doanh_nghiep_id,
+                    'taxCode' => $item->tax_code,
+                    'companyName' => $item->doanhNghiep?->ten_doanh_nghiep,
+                    'taxPaidAt' => $item->tax_paid_at?->toDateString(),
+                    'importedBy' => $item->importedBy ? [
+                        'id' => $item->importedBy->id,
+                        'name' => $item->importedBy->name,
+                    ] : null,
+                ];
+            })->values(),
+            'meta' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ],
+        ], 'Lấy danh sách doanh nghiệp đóng thuế theo đơn vị thành công');
     }
 
     public function upsertCooperative(Request $request): JsonResponse
@@ -198,10 +286,12 @@ class TaxManagementController extends ApiController
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
             'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'columnMap' => ['nullable'],
+            'taxPaidAt' => ['nullable', 'date'],
         ]);
 
         $startRow = $request->has('startRow') ? (int) $request->input('startRow') : TaxImportColumnMap::DEFAULT_START_ROW;
         $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
+        $taxPaidAt = $this->parseDateOrNull($request->input('taxPaidAt')) ?? now()->toDateString();
 
         $uploadedFile = $request->file('file');
         $storedPath = $uploadedFile->store('imports/pending');
@@ -213,6 +303,7 @@ class TaxManagementController extends ApiController
             'file_path' => $storedPath,
             'original_filename' => $uploadedFile->getClientOriginalName(),
             'start_row' => $startRow,
+            'tax_paid_at' => $taxPaidAt,
             'column_map' => $columnMap,
         ]);
 
