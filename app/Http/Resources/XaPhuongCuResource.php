@@ -19,7 +19,11 @@ class XaPhuongCuResource extends JsonResource
             'unitType' => $this->unit_type,
             'quanHuyenCuCode' => $this->quan_huyen_cu_code,
             'quanHuyenCu' => new QuanHuyenCuResource($this->whenLoaded('quanHuyen')),
-            'mapping' => new HanhChinhMappingResource($this->whenLoaded('mapping')),
+            'mappings' => HanhChinhMappingResource::collection($this->whenLoaded('mappings')),
+            'mapping' => $this->when(
+                $this->relationLoaded('mappings') && $this->mappings->isNotEmpty(),
+                fn () => new HanhChinhMappingResource($this->mappings->first()),
+            ),
         ];
     }
 }

@@ -58,7 +58,7 @@ class HanhChinhCuController extends ApiController
             ->orderBy('full_name');
 
         if ($request->boolean('unmappedOnly')) {
-            $query->whereDoesntHave('mapping');
+            $query->whereDoesntHave('mappings');
         }
 
         if ($search !== '') {
@@ -93,7 +93,7 @@ class HanhChinhCuController extends ApiController
 
         $search = trim((string) $request->query('search', ''));
 
-        $query = $district->xaPhuong()->with('mapping.xaPhuongMoi')->orderBy('full_name');
+        $query = $district->xaPhuong()->with('mappings.xaPhuongMoi')->orderBy('full_name');
 
         if ($search !== '') {
             $query->where('full_name', 'like', "%{$search}%");

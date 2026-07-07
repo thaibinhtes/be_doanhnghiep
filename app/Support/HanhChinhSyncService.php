@@ -99,21 +99,11 @@ class HanhChinhSyncService
 
                 $mappingPayload = [
                     'group_no' => $groupNo,
-                    'xa_phuong_moi_code' => $xaMoi->code,
                     'new_unit_type' => $row['loaiMoi'] ?? $row['loai_moi'] ?? null,
                     'notes' => $row['notes'] ?? null,
                 ];
 
-                $existing = HanhChinhMapping::query()->where('xa_phuong_cu_code', $xaCuCode)->first();
-                HanhChinhMapping::query()->updateOrCreate(
-                    ['xa_phuong_cu_code' => $xaCuCode],
-                    $mappingPayload,
-                );
-                if (!$existing) {
-                    $counts['mappings']++;
-                } else {
-                    $counts['mappingsUpdated']++;
-                }
+                $this->upsertMappingPair($xaCuCode, $xaMoi->code, $mappingPayload, $counts);
             }
         });
 
@@ -165,22 +155,11 @@ class HanhChinhSyncService
 
                 $mappingPayload = [
                     'group_no' => $groupNo,
-                    'xa_phuong_moi_code' => $xaMoi->code,
                     'new_unit_type' => is_string($loaiMoi) ? $loaiMoi : (is_scalar($loaiMoi) ? trim((string) $loaiMoi) : null),
                     'notes' => $row['notes'] ?? null,
                 ];
 
-                $existing = HanhChinhMapping::query()->where('xa_phuong_cu_code', $xaCu->code)->first();
-                HanhChinhMapping::query()->updateOrCreate(
-                    ['xa_phuong_cu_code' => $xaCu->code],
-                    $mappingPayload,
-                );
-
-                if (!$existing) {
-                    $counts['mappings']++;
-                } else {
-                    $counts['mappingsUpdated']++;
-                }
+                $this->upsertMappingPair($xaCu->code, $xaMoi->code, $mappingPayload, $counts);
             }
         });
 
@@ -188,10 +167,12 @@ class HanhChinhSyncService
     }
 
     /**
-     * Liên kết nhiều đơn vị cũ với một đơn vị mới.
+     * Liên kết nhiều đơn vị cũ với một đơn vị mới (many-to-many).
+     * Một đơn vị cũ có thể liên kết nhiều đơn vị mới và ngược lại.
      *
      * @param  list<string>  $xaPhuongCuCodes
-     * @return array{created: int, updated: int}
+     * @param  list<string>|null  $syncScopeCuCodes  Phạm vi đồng bộ: bỏ liên kết (cũ→mới) nếu không còn được chọn.
+     * @return array{created: int, updated: int, deleted: int}
      */
     public function linkLegacyToNew(
         array $xaPhuongCuCodes,
@@ -199,33 +180,41 @@ class HanhChinhSyncService
         ?int $groupNo = null,
         ?string $newUnitType = null,
         ?string $notes = null,
+        ?array $syncScopeCuCodes = null,
     ): array {
         $created = 0;
         $updated = 0;
+        $deleted = 0;
 
-        DB::transaction(function () use ($xaPhuongCuCodes, $xaPhuongMoiCode, $groupNo, $newUnitType, $notes, &$created, &$updated) {
-            foreach ($xaPhuongCuCodes as $code) {
-                $existing = HanhChinhMapping::query()->where('xa_phuong_cu_code', $code)->first();
+        DB::transaction(function () use ($xaPhuongCuCodes, $xaPhuongMoiCode, $groupNo, $newUnitType, $notes, $syncScopeCuCodes, &$created, &$updated, &$deleted) {
+            $codesToLink = array_values(array_unique($xaPhuongCuCodes));
+            $counts = ['mappings' => 0, 'mappingsUpdated' => 0];
 
-                HanhChinhMapping::query()->updateOrCreate(
-                    ['xa_phuong_cu_code' => $code],
-                    [
-                        'group_no' => $groupNo,
-                        'xa_phuong_moi_code' => $xaPhuongMoiCode,
-                        'new_unit_type' => $newUnitType,
-                        'notes' => $notes,
-                    ],
-                );
+            foreach ($codesToLink as $code) {
+                $this->upsertMappingPair($code, $xaPhuongMoiCode, [
+                    'group_no' => $groupNo,
+                    'new_unit_type' => $newUnitType,
+                    'notes' => $notes,
+                ], $counts);
+            }
 
-                if ($existing) {
-                    $updated++;
-                } else {
-                    $created++;
+            $created = $counts['mappings'];
+            $updated = $counts['mappingsUpdated'];
+
+            if ($syncScopeCuCodes !== null) {
+                $scope = array_values(array_unique($syncScopeCuCodes));
+                $toUnlink = array_diff($scope, $codesToLink);
+
+                foreach ($toUnlink as $code) {
+                    $deleted += HanhChinhMapping::query()
+                        ->where('xa_phuong_cu_code', $code)
+                        ->where('xa_phuong_moi_code', $xaPhuongMoiCode)
+                        ->delete();
                 }
             }
         });
 
-        return compact('created', 'updated');
+        return compact('created', 'updated', 'deleted');
     }
 
     /**
@@ -362,12 +351,12 @@ class HanhChinhSyncService
 
                 $result['matched']++;
 
-                $mapping = HanhChinhMapping::query()
+                $mappings = HanhChinhMapping::query()
                     ->with(['xaPhuongMoi.tinhThanh'])
                     ->where('xa_phuong_cu_code', $xaCu->code)
-                    ->first();
+                    ->get();
 
-                if (!$mapping?->xaPhuongMoi) {
+                if ($mappings->isEmpty()) {
                     $result['unmapped'][] = [
                         'id' => $company->id,
                         'maSoDoanhNghiep' => $company->ma_so_doanh_nghiep,
@@ -375,6 +364,35 @@ class HanhChinhSyncService
                         'phuongXa' => $company->phuong_xa,
                         'xaPhuongCuCode' => $xaCu->code,
                         'reason' => 'Chưa có mapping sang đơn vị mới',
+                    ];
+                    continue;
+                }
+
+                $mapping = null;
+                if ($company->xa_phuong_code) {
+                    $mapping = $mappings->firstWhere('xa_phuong_moi_code', $company->xa_phuong_code);
+                }
+                if (!$mapping && $mappings->count() === 1) {
+                    $mapping = $mappings->first();
+                }
+
+                if (!$mapping?->xaPhuongMoi) {
+                    $newUnitNames = $mappings
+                        ->map(fn (HanhChinhMapping $item) => $item->xaPhuongMoi?->full_name)
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    $result['unmapped'][] = [
+                        'id' => $company->id,
+                        'maSoDoanhNghiep' => $company->ma_so_doanh_nghiep,
+                        'quanHuyen' => $company->quan_huyen,
+                        'phuongXa' => $company->phuong_xa,
+                        'xaPhuongCuCode' => $xaCu->code,
+                        'reason' => count($newUnitNames) > 1
+                            ? 'Nhiều đơn vị mới: ' . implode(', ', $newUnitNames)
+                            : 'Chưa xác định được đơn vị mới',
                     ];
                     continue;
                 }
@@ -428,6 +446,37 @@ class HanhChinhSyncService
         }
 
         return $query->with('quanHuyen')->first();
+    }
+
+    /**
+     * @param  array{mappings?: int, mappingsUpdated?: int}  $counts
+     */
+    private function upsertMappingPair(
+        string $xaCuCode,
+        string $xaMoiCode,
+        array $payload,
+        array &$counts,
+    ): bool {
+        $existing = HanhChinhMapping::query()
+            ->where('xa_phuong_cu_code', $xaCuCode)
+            ->where('xa_phuong_moi_code', $xaMoiCode)
+            ->first();
+
+        HanhChinhMapping::query()->updateOrCreate(
+            [
+                'xa_phuong_cu_code' => $xaCuCode,
+                'xa_phuong_moi_code' => $xaMoiCode,
+            ],
+            $payload,
+        );
+
+        if ($existing) {
+            $counts['mappingsUpdated'] = ($counts['mappingsUpdated'] ?? 0) + 1;
+        } else {
+            $counts['mappings'] = ($counts['mappings'] ?? 0) + 1;
+        }
+
+        return true;
     }
 
     private function resolveNewWard(string $wardName, ?string $provinceCode): ?XaPhuong

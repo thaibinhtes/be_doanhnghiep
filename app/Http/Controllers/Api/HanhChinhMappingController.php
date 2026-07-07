@@ -114,8 +114,10 @@ class HanhChinhMappingController extends ApiController
             'xaPhuongMoiCode' => ['required', 'string', 'exists:xa_phuong,code'],
             'newUnitType' => ['nullable', 'string', 'max:32'],
             'notes' => ['nullable', 'string'],
-            'xaPhuongCuCodes' => ['required', 'array', 'min:1'],
+            'xaPhuongCuCodes' => ['present', 'array'],
             'xaPhuongCuCodes.*' => ['string', 'exists:xa_phuong_cu,code'],
+            'syncScopeCuCodes' => ['nullable', 'array'],
+            'syncScopeCuCodes.*' => ['string', 'exists:xa_phuong_cu,code'],
         ]);
 
         $result = $this->syncService->linkLegacyToNew(
@@ -124,6 +126,7 @@ class HanhChinhMappingController extends ApiController
             $payload['groupNo'] ?? null,
             $payload['newUnitType'] ?? null,
             $payload['notes'] ?? null,
+            $payload['syncScopeCuCodes'] ?? null,
         );
 
         return $this->success($result, 'Liên kết đơn vị hành chính thành công', 201);
@@ -193,8 +196,11 @@ class HanhChinhMappingController extends ApiController
             'notes' => ['nullable', 'string'],
         ]);
 
-        if (HanhChinhMapping::query()->where('xa_phuong_cu_code', $payload['xaPhuongCuCode'])->exists()) {
-            return $this->error('Đơn vị hành chính cũ đã có mapping.', 422);
+        if (HanhChinhMapping::query()
+            ->where('xa_phuong_cu_code', $payload['xaPhuongCuCode'])
+            ->where('xa_phuong_moi_code', $payload['xaPhuongMoiCode'])
+            ->exists()) {
+            return $this->error('Liên kết này đã tồn tại.', 422);
         }
 
         $mapping = HanhChinhMapping::query()->create([
@@ -255,13 +261,16 @@ class HanhChinhMappingController extends ApiController
         foreach ($payload['items'] as $item) {
             $existing = HanhChinhMapping::query()
                 ->where('xa_phuong_cu_code', $item['xaPhuongCuCode'])
+                ->where('xa_phuong_moi_code', $item['xaPhuongMoiCode'])
                 ->first();
 
             HanhChinhMapping::query()->updateOrCreate(
-                ['xa_phuong_cu_code' => $item['xaPhuongCuCode']],
+                [
+                    'xa_phuong_cu_code' => $item['xaPhuongCuCode'],
+                    'xa_phuong_moi_code' => $item['xaPhuongMoiCode'],
+                ],
                 [
                     'group_no' => $item['groupNo'] ?? null,
-                    'xa_phuong_moi_code' => $item['xaPhuongMoiCode'],
                     'new_unit_type' => $item['newUnitType'] ?? null,
                     'notes' => $item['notes'] ?? null,
                 ],

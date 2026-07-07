@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class XaPhuongCu extends Model
 {
@@ -28,8 +28,8 @@ class XaPhuongCu extends Model
         return $this->belongsTo(QuanHuyenCu::class, 'quan_huyen_cu_code', 'code');
     }
 
-    public function mapping(): HasOne
+    public function mappings(): HasMany
     {
-        return $this->hasOne(HanhChinhMapping::class, 'xa_phuong_cu_code', 'code');
+        return $this->hasMany(HanhChinhMapping::class, 'xa_phuong_cu_code', 'code');
     }
 }
