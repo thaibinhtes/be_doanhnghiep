@@ -421,6 +421,152 @@ class HanhChinhSyncService
         return $result;
     }
 
+    /**
+     * @return array<int, array{key: string, label: string, sources: array<int, array{key: string, label: string}>}>
+     */
+    public function companyFieldSyncOptions(): array
+    {
+        return [
+            [
+                'key' => 'quanHuyen',
+                'label' => 'Quận / Huyện',
+                'sources' => [
+                    ['key' => 'hanh_chinh_cu', 'label' => 'Hành chính cũ (quận/huyện)'],
+                    ['key' => 'hanh_chinh_moi', 'label' => 'Hành chính mới (tỉnh/thành)'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     field: string,
+     *     sourceTable: string,
+     *     matched: int,
+     *     updated: int,
+     *     skipped: int,
+     *     alreadyLinked: int,
+     *     unmapped: array<int, array<string, mixed>>
+     * }
+     */
+    public function syncCompanyField(string $field, string $sourceTable, bool $dryRun = false, ?User $user = null): array
+    {
+        if ($field !== 'quanHuyen') {
+            throw new \InvalidArgumentException('Field không được hỗ trợ đồng bộ.');
+        }
+
+        if (!in_array($sourceTable, ['hanh_chinh_cu', 'hanh_chinh_moi'], true)) {
+            throw new \InvalidArgumentException('Bảng nguồn không hợp lệ.');
+        }
+
+        $result = [
+            'field' => $field,
+            'sourceTable' => $sourceTable,
+            'matched' => 0,
+            'updated' => 0,
+            'skipped' => 0,
+            'alreadyLinked' => 0,
+            'unmapped' => [],
+        ];
+
+        $codeColumn = $sourceTable === 'hanh_chinh_cu' ? 'quan_huyen_cu_code' : 'tinh_thanh_code';
+
+        DoanhNghiepScopeHelper::query($user)->orderBy('id')->chunkById(200, function ($companies) use (
+            $dryRun,
+            $sourceTable,
+            $codeColumn,
+            &$result
+        ): void {
+            foreach ($companies as $company) {
+                $textValue = HanhChinhCodeGenerator::normalizeName((string) ($company->quan_huyen ?? ''));
+
+                if ($textValue === '') {
+                    $result['skipped']++;
+                    continue;
+                }
+
+                if ($company->{$codeColumn}) {
+                    $result['alreadyLinked']++;
+                    continue;
+                }
+
+                $matchedUnit = $sourceTable === 'hanh_chinh_cu'
+                    ? $this->findLegacyDistrict($textValue)
+                    : $this->findNewProvince($textValue);
+
+                if (!$matchedUnit) {
+                    $result['unmapped'][] = [
+                        'id' => $company->id,
+                        'maSoDoanhNghiep' => $company->ma_so_doanh_nghiep,
+                        'quanHuyen' => $company->quan_huyen,
+                        'phuongXa' => $company->phuong_xa,
+                        'reason' => $sourceTable === 'hanh_chinh_cu'
+                            ? 'Không khớp quận/huyện trong hành chính cũ'
+                            : 'Không khớp tỉnh/thành trong hành chính mới',
+                    ];
+                    continue;
+                }
+
+                $result['matched']++;
+
+                if ($dryRun) {
+                    $result['updated']++;
+                    continue;
+                }
+
+                $company->update([
+                    $codeColumn => $matchedUnit->code,
+                ]);
+
+                $result['updated']++;
+            }
+        });
+
+        return $result;
+    }
+
+    private function findLegacyDistrict(string $districtName): ?QuanHuyenCu
+    {
+        $districts = QuanHuyenCu::query()
+            ->where('full_name', $districtName)
+            ->get();
+
+        if ($districts->count() === 1) {
+            return $districts->first();
+        }
+
+        if ($districts->count() > 1) {
+            return null;
+        }
+
+        $lowerMatches = QuanHuyenCu::query()
+            ->whereRaw('LOWER(full_name) = ?', [mb_strtolower($districtName)])
+            ->get();
+
+        return $lowerMatches->count() === 1 ? $lowerMatches->first() : null;
+    }
+
+    private function findNewProvince(string $provinceName): ?TinhThanh
+    {
+        $provinces = TinhThanh::query()
+            ->where('full_name', $provinceName)
+            ->get();
+
+        if ($provinces->count() === 1) {
+            return $provinces->first();
+        }
+
+        if ($provinces->count() > 1) {
+            return null;
+        }
+
+        $lowerMatches = TinhThanh::query()
+            ->whereRaw('LOWER(full_name) = ?', [mb_strtolower($provinceName)])
+            ->get();
+
+        return $lowerMatches->count() === 1 ? $lowerMatches->first() : null;
+    }
+
     public function matchCompanyToLegacyWard(DoanhNghiep $company): ?XaPhuongCu
     {
         if ($company->xa_phuong_cu_code) {
@@ -432,6 +578,13 @@ class HanhChinhSyncService
 
         if ($phuongXa === '') {
             return null;
+        }
+
+        if ($company->quan_huyen_cu_code) {
+            return XaPhuongCu::query()
+                ->where('full_name', $phuongXa)
+                ->where('quan_huyen_cu_code', $company->quan_huyen_cu_code)
+                ->first();
         }
 
         return $this->findLegacyWard($quanHuyen, $phuongXa);

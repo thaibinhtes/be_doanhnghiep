@@ -24,6 +24,7 @@ class DoanhNghiep extends Model
         'lat',
         'quan_huyen',
         'phuong_xa',
+        'quan_huyen_cu_code',
         'xa_phuong_cu_code',
         'tinh_thanh_code',
         'xa_phuong_code',
@@ -132,5 +133,15 @@ class DoanhNghiep extends Model
     public function taxManagement(): HasOne
     {
         return $this->hasOne(CompanyTaxManagement::class, 'doanh_nghiep_id');
+    }
+
+    public function quanHuyenCu(): BelongsTo
+    {
+        return $this->belongsTo(QuanHuyenCu::class, 'quan_huyen_cu_code', 'code');
+    }
+
+    public function tinhThanh(): BelongsTo
+    {
+        return $this->belongsTo(TinhThanh::class, 'tinh_thanh_code', 'code');
     }
 }

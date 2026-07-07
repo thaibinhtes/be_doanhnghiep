@@ -80,7 +80,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hanh-chinh/moi/import-column-map', [HanhChinhMoiController::class, 'importColumnMap']);
     Route::get('/hanh-chinh/mappings', [HanhChinhMappingController::class, 'index']);
     Route::get('/hanh-chinh/mappings/groups', [HanhChinhMappingController::class, 'indexGroups']);
-    Route::get('/hanh-chinh/unmapped-doanh-nghiep', [HanhChinhMappingController::class, 'unmappedCompanies']);
+        Route::get('/hanh-chinh/unmapped-doanh-nghiep', [HanhChinhMappingController::class, 'unmappedCompanies']);
+    Route::get('/hanh-chinh/sync-doanh-nghiep/fields', [HanhChinhMappingController::class, 'companyFieldSyncOptions']);
 
     Route::middleware('permission:feature.cadastral.manage')->group(function () {
         Route::post('/hanh-chinh/cu/import', [HanhChinhCuController::class, 'bulkImport']);
@@ -101,6 +102,7 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('/hanh-chinh/mappings/{hanhChinhMapping}', [HanhChinhMappingController::class, 'update']);
         Route::delete('/hanh-chinh/mappings/{hanhChinhMapping}', [HanhChinhMappingController::class, 'destroy']);
         Route::post('/hanh-chinh/sync-doanh-nghiep', [HanhChinhMappingController::class, 'syncCompanies']);
+        Route::post('/hanh-chinh/sync-doanh-nghiep-field', [HanhChinhMappingController::class, 'syncCompanyField']);
     });
 
     Route::get('/reports/tong-hop', [ReportController::class, 'tongHop']);

@@ -297,6 +297,36 @@ class HanhChinhMappingController extends ApiController
         return $this->success($result, ($payload['dryRun'] ?? false) ? 'Dry-run đồng bộ hoàn tất' : 'Đồng bộ doanh nghiệp thành công');
     }
 
+    public function companyFieldSyncOptions(): JsonResponse
+    {
+        return $this->success($this->syncService->companyFieldSyncOptions(), 'Lấy danh sách field đồng bộ thành công');
+    }
+
+    public function syncCompanyField(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'field' => ['required', 'string', 'in:quanHuyen'],
+            'sourceTable' => ['required', 'string', 'in:hanh_chinh_cu,hanh_chinh_moi'],
+            'dryRun' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            $result = $this->syncService->syncCompanyField(
+                $payload['field'],
+                $payload['sourceTable'],
+                (bool) ($payload['dryRun'] ?? false),
+                $request->user(),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return $this->success(
+            $result,
+            ($payload['dryRun'] ?? false) ? 'Dry-run đồng bộ field hoàn tất' : 'Đồng bộ field doanh nghiệp thành công',
+        );
+    }
+
     public function unmappedCompanies(): JsonResponse
     {
         $result = $this->syncService->syncCompanies(true, request()->user());

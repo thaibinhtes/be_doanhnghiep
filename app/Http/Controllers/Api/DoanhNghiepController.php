@@ -620,7 +620,7 @@ class DoanhNghiepController extends ApiController
         $user = request()->user();
         $requestedDonViId = request()->filled('donViId') ? (int) request('donViId') : null;
         $query = DoanhNghiepScopeHelper::query($user)
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'quanHuyenCu', 'tinhThanh']);
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = DoanhNghiepScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
