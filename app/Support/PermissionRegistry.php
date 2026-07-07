@@ -38,6 +38,7 @@ class PermissionRegistry
             ['key' => 'menu.admin.industry-categories', 'name' => 'Danh mục ngành nghề', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/industry-categories', 'sort_order' => 33],
             ['key' => 'menu.admin.org-units', 'name' => 'Quản lý đơn vị', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/org-units', 'sort_order' => 34],
             ['key' => 'menu.admin.users', 'name' => 'Quản lý người dùng', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/users', 'sort_order' => 35],
+            ['key' => 'menu.import-history', 'name' => 'Danh mục lịch sử import', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/import-history', 'sort_order' => 36],
 
             // Feature — Doanh nghiệp
             ['key' => 'feature.companies.create', 'name' => 'Tạo doanh nghiệp', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 100],
@@ -85,6 +86,7 @@ class PermissionRegistry
             'menu.reports.progress',
             'menu.members.list',
             'menu.cooperatives.list',
+            'menu.import-history',
             'feature.org-units.view',
         ];
     }

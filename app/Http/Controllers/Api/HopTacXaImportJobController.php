@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\HopTacXaImportJob;
 use App\Models\HopTacXaImportJobRow;
+use App\Support\ImportJobScopeHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,10 +14,12 @@ class HopTacXaImportJobController extends ApiController
     {
         $perPage = min(max((int) $request->input('per_page', $request->input('perPage', 15)), 1), 50);
 
-        $jobs = HopTacXaImportJob::query()
-            ->where('user_id', $request->user()->id)
-            ->orderByDesc('created_at')
-            ->paginate($perPage);
+        $jobs = ImportJobScopeHelper::applyScope(
+            HopTacXaImportJob::query()
+                ->with(['user:id,name', 'donVi:id,ten,ma'])
+                ->orderByDesc('created_at'),
+            $request->user(),
+        )->paginate($perPage);
 
         $jobs->getCollection()->transform(fn (HopTacXaImportJob $job) => $this->transformJob($job));
 
@@ -25,16 +28,18 @@ class HopTacXaImportJobController extends ApiController
 
     public function show(HopTacXaImportJob $importJob): JsonResponse
     {
-        if ($importJob->user_id !== request()->user()->id) {
+        if (!ImportJobScopeHelper::userCanAccess(request()->user(), $importJob)) {
             return $this->error('Không có quyền xem job import này.', 403);
         }
+
+        $importJob->load(['user:id,name', 'donVi:id,ten,ma']);
 
         return $this->success($this->transformJob($importJob, true));
     }
 
     public function rows(HopTacXaImportJob $importJob, Request $request): JsonResponse
     {
-        if ($importJob->user_id !== $request->user()->id) {
+        if (!ImportJobScopeHelper::userCanAccess($request->user(), $importJob)) {
             return $this->error('Không có quyền xem job import này.', 403);
         }
 
@@ -75,6 +80,15 @@ class HopTacXaImportJobController extends ApiController
                 'failed' => (int) ($result['failed'] ?? 0),
             ],
             'errorMessage' => $job->error_message,
+            'importedBy' => $job->user ? [
+                'id' => $job->user->id,
+                'name' => $job->user->name,
+            ] : null,
+            'donVi' => $job->donVi ? [
+                'id' => $job->donVi->id,
+                'ten' => $job->donVi->ten,
+                'ma' => $job->donVi->ma,
+            ] : null,
             'startedAt' => $job->started_at?->toIso8601String(),
             'finishedAt' => $job->finished_at?->toIso8601String(),
             'createdAt' => $job->created_at?->toIso8601String(),

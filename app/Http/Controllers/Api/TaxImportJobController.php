@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\TaxImportJob;
+use App\Support\ImportJobScopeHelper;
 use App\Models\TaxImportJobRow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +12,7 @@ class TaxImportJobController extends ApiController
 {
     public function rows(TaxImportJob $importJob, Request $request): JsonResponse
     {
-        if ($importJob->user_id !== $request->user()->id) {
+        if (!ImportJobScopeHelper::userCanAccess($request->user(), $importJob)) {
             return $this->error('Không có quyền xem job import này.', 403);
         }
 

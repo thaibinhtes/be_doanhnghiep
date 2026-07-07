@@ -21,6 +21,7 @@ class DoanhNghiepImportJob extends Model
 
     protected $fillable = [
         'user_id',
+        'don_vi_id',
         'status',
         'type',
         'file_path',
@@ -50,6 +51,11 @@ class DoanhNghiepImportJob extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function donVi(): BelongsTo
+    {
+        return $this->belongsTo(DonVi::class, 'don_vi_id');
     }
 
     public function rows(): HasMany

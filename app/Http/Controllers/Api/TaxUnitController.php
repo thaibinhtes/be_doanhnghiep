@@ -6,6 +6,7 @@ use App\Jobs\ProcessTaxUnitImportJob;
 use App\Http\Resources\TaxUnitResource;
 use App\Models\TaxImportJob;
 use App\Models\TaxUnit;
+use App\Support\ImportJobScopeHelper;
 use App\Support\TaxExcelColumns;
 use App\Support\TaxImportColumnMap;
 use Illuminate\Http\JsonResponse;
@@ -100,6 +101,7 @@ class TaxUnitController extends ApiController
 
         $importJob = TaxImportJob::query()->create([
             'user_id' => (int) $request->user()->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId($request->user()),
             'status' => TaxImportJob::STATUS_PENDING,
             'type' => TaxImportJob::TYPE_TAX_UNITS,
             'file_path' => $storedPath,

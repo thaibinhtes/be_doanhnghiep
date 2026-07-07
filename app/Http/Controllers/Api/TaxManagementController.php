@@ -10,6 +10,7 @@ use App\Models\DoanhNghiep;
 use App\Models\HopTacXa;
 use App\Models\TaxImportJob;
 use App\Models\TaxUnit;
+use App\Support\ImportJobScopeHelper;
 use App\Support\TaxExcelColumns;
 use App\Support\TaxImportColumnMap;
 use Carbon\Carbon;
@@ -25,9 +26,12 @@ class TaxManagementController extends ApiController
         $allowedTypes = [TaxImportJob::TYPE_TAX_UNITS, TaxImportJob::TYPE_COMPANY_TAX];
         $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 20)), 1), 100);
 
-        $query = TaxImportJob::query()
-            ->where('user_id', (int) $request->user()->id)
-            ->orderByDesc('created_at');
+        $query = ImportJobScopeHelper::applyScope(
+            TaxImportJob::query()
+                ->with(['user:id,name', 'donVi:id,ten,ma'])
+                ->orderByDesc('created_at'),
+            $request->user(),
+        );
 
         if (in_array($type, $allowedTypes, true)) {
             $query->where('type', $type);
@@ -53,6 +57,15 @@ class TaxManagementController extends ApiController
                         'failed' => $failed,
                     ],
                     'errorMessage' => $item->error_message,
+                    'importedBy' => $item->user ? [
+                        'id' => $item->user->id,
+                        'name' => $item->user->name,
+                    ] : null,
+                    'donVi' => $item->donVi ? [
+                        'id' => $item->donVi->id,
+                        'ten' => $item->donVi->ten,
+                        'ma' => $item->donVi->ma,
+                    ] : null,
                     'createdAt' => $item->created_at?->toIso8601String(),
                     'startedAt' => $item->started_at?->toIso8601String(),
                     'finishedAt' => $item->finished_at?->toIso8601String(),
@@ -347,6 +360,7 @@ class TaxManagementController extends ApiController
 
         $importJob = TaxImportJob::query()->create([
             'user_id' => (int) $request->user()->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId($request->user()),
             'status' => TaxImportJob::STATUS_PENDING,
             'type' => TaxImportJob::TYPE_COMPANY_TAX,
             'file_path' => $storedPath,

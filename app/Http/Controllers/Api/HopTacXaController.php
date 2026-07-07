@@ -17,6 +17,7 @@ use App\Support\HopTacXaImportColumnMap;
 use App\Support\HopTacXaScopeHelper;
 use App\Support\ImportExcelKindDetector;
 use App\Support\ImportExcelKindGuard;
+use App\Support\ImportJobScopeHelper;
 use App\Support\ImportSocketNotifier;
 use App\Support\ImportSocketTopics;
 use App\Support\ImportUploadLogger;
@@ -109,6 +110,7 @@ class HopTacXaController extends ApiController
 
         $importJob = HopTacXaImportJob::query()->create([
             'user_id' => $user->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId($user),
             'status' => HopTacXaImportJob::STATUS_PENDING,
             'type' => HopTacXaImportJob::TYPE_COOPERATIVES,
             'file_path' => $storedPath,

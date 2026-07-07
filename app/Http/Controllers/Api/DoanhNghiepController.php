@@ -30,6 +30,7 @@ use App\Support\DonViDataClearService;
 use App\Support\DoanhNghiepStatusHelper;
 use App\Support\ImportExcelKindDetector;
 use App\Support\ImportExcelKindGuard;
+use App\Support\ImportJobScopeHelper;
 use App\Support\ImportSocketNotifier;
 use App\Support\ImportSocketTopics;
 use Illuminate\Database\Eloquent\Builder;
@@ -150,6 +151,7 @@ class DoanhNghiepController extends ApiController
 
         $importJob = DoanhNghiepImportJob::query()->create([
             'user_id' => $user->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId($user),
             'status' => DoanhNghiepImportJob::STATUS_PENDING,
             'type' => DoanhNghiepImportJob::TYPE_COMPANIES,
             'file_path' => $storedPath,
@@ -223,6 +225,7 @@ class DoanhNghiepController extends ApiController
 
         $importJob = DoanhNghiepImportJob::query()->create([
             'user_id' => request()->user()->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId(request()->user()),
             'status' => DoanhNghiepImportJob::STATUS_PENDING,
             'type' => DoanhNghiepImportJob::TYPE_IDENTITIES,
             'file_path' => $storedPath,
