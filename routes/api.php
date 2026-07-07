@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\HanhChinhCuController;
+use App\Http\Controllers\Api\HanhChinhImportConfigController;
+use App\Http\Controllers\Api\HanhChinhImportFormatController;
 use App\Http\Controllers\Api\HanhChinhMappingController;
 use App\Http\Controllers\Api\HanhChinhMoiController;
 use App\Http\Controllers\Api\AuthController;
@@ -64,16 +66,33 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/tinh-thanh/{code}/xa-phuong', [TinhThanhController::class, 'xaPhuong']);
 
     Route::get('/hanh-chinh/cu/tinh-thanh', [HanhChinhCuController::class, 'indexProvinces']);
-    Route::get('/hanh-chinh/cu/tinh-thanh/{provinceCode}/quan-huyen', [HanhChinhCuController::class, 'indexDistricts']);
+    Route::get('/hanh-chinh/cu/quan-huyen', [HanhChinhCuController::class, 'indexDistricts']);
+    Route::get('/hanh-chinh/cu/don-vi', [HanhChinhCuController::class, 'indexLegacyUnits']);
+    Route::get('/hanh-chinh/cu/tinh-thanh/{provinceCode}/quan-huyen', [HanhChinhCuController::class, 'indexDistrictsByProvince']);
     Route::get('/hanh-chinh/cu/quan-huyen/{districtCode}/xa-phuong', [HanhChinhCuController::class, 'indexWards']);
+    Route::get('/hanh-chinh/cu/import-column-map', [HanhChinhCuController::class, 'importColumnMap']);
+    Route::get('/hanh-chinh/cu/import-configs', [HanhChinhImportConfigController::class, 'index']);
+    Route::get('/hanh-chinh/cu/import-formats', [HanhChinhImportFormatController::class, 'index']);
+    Route::get('/hanh-chinh/moi/don-vi', [HanhChinhMoiController::class, 'indexNewUnits']);
+    Route::get('/hanh-chinh/moi/import-column-map', [HanhChinhMoiController::class, 'importColumnMap']);
     Route::get('/hanh-chinh/mappings', [HanhChinhMappingController::class, 'index']);
+    Route::get('/hanh-chinh/mappings/groups', [HanhChinhMappingController::class, 'indexGroups']);
     Route::get('/hanh-chinh/unmapped-doanh-nghiep', [HanhChinhMappingController::class, 'unmappedCompanies']);
 
     Route::middleware('permission:feature.cadastral.manage')->group(function () {
         Route::post('/hanh-chinh/cu/import', [HanhChinhCuController::class, 'bulkImport']);
+        Route::post('/hanh-chinh/cu/import-excel', [HanhChinhCuController::class, 'importExcel']);
+        Route::post('/hanh-chinh/cu/import-formats', [HanhChinhImportFormatController::class, 'store']);
+        Route::put('/hanh-chinh/cu/import-formats/{importFormat}', [HanhChinhImportFormatController::class, 'update']);
+        Route::delete('/hanh-chinh/cu/import-formats/{importFormat}', [HanhChinhImportFormatController::class, 'destroy']);
         Route::post('/hanh-chinh/moi/import', [HanhChinhMoiController::class, 'bulkImport']);
+        Route::post('/hanh-chinh/moi/import-excel', [HanhChinhMoiController::class, 'importExcel']);
         Route::post('/hanh-chinh/moi/import-dataset', [HanhChinhMoiController::class, 'importFromDataset']);
+        Route::get('/hanh-chinh/moi/clear/preview', [HanhChinhMoiController::class, 'clearPreview']);
+        Route::delete('/hanh-chinh/moi/clear', [HanhChinhMoiController::class, 'clear']);
         Route::post('/hanh-chinh/mappings', [HanhChinhMappingController::class, 'store']);
+        Route::post('/hanh-chinh/mappings/link', [HanhChinhMappingController::class, 'link']);
+        Route::post('/hanh-chinh/mappings/import-excel', [HanhChinhMappingController::class, 'importExcel']);
         Route::post('/hanh-chinh/mappings/import', [HanhChinhMappingController::class, 'bulkImport']);
         Route::put('/hanh-chinh/mappings/{hanhChinhMapping}', [HanhChinhMappingController::class, 'update']);
         Route::patch('/hanh-chinh/mappings/{hanhChinhMapping}', [HanhChinhMappingController::class, 'update']);

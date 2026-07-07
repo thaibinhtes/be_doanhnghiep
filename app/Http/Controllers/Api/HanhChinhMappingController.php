@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Imports\HanhChinhLegacyColumnImport;
 use App\Http\Resources\HanhChinhMappingResource;
 use App\Models\HanhChinhMapping;
+use App\Support\HanhChinhImportColumnMap;
 use App\Support\HanhChinhSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class HanhChinhMappingController extends ApiController
 {
@@ -44,6 +47,140 @@ class HanhChinhMappingController extends ApiController
             HanhChinhMappingResource::collection($query->paginate($perPage)),
             'Lấy danh sách mapping thành công',
         );
+    }
+
+    public function indexGroups(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        $query = HanhChinhMapping::query()
+            ->with(['xaPhuongCu.quanHuyen', 'xaPhuongMoi.tinhThanh'])
+            ->orderBy('group_no')
+            ->orderBy('xa_phuong_moi_code')
+            ->orderBy('id');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->whereHas('xaPhuongCu', fn ($q) => $q->where('full_name', 'like', "%{$search}%"))
+                    ->orWhereHas('xaPhuongMoi', fn ($q) => $q->where('full_name', 'like', "%{$search}%"));
+            });
+        }
+
+        $mappings = $query->get();
+        $groups = [];
+
+        foreach ($mappings as $mapping) {
+            $groupKey = ($mapping->group_no ?? 'none') . ':' . $mapping->xa_phuong_moi_code;
+
+            if (!isset($groups[$groupKey])) {
+                $groups[$groupKey] = [
+                    'groupNo' => $mapping->group_no,
+                    'xaPhuongMoiCode' => $mapping->xa_phuong_moi_code,
+                    'newUnitType' => $mapping->new_unit_type,
+                    'xaPhuongMoi' => $mapping->xaPhuongMoi ? [
+                        'code' => $mapping->xaPhuongMoi->code,
+                        'fullName' => $mapping->xaPhuongMoi->full_name,
+                        'unitType' => $mapping->xaPhuongMoi->unit_type,
+                        'tinhThanhCode' => $mapping->xaPhuongMoi->tinh_thanh_code,
+                        'tinhThanh' => $mapping->xaPhuongMoi->tinhThanh ? [
+                            'code' => $mapping->xaPhuongMoi->tinhThanh->code,
+                            'fullName' => $mapping->xaPhuongMoi->tinhThanh->full_name,
+                        ] : null,
+                    ] : null,
+                    'legacyUnits' => [],
+                ];
+            }
+
+            $groups[$groupKey]['legacyUnits'][] = [
+                'mappingId' => $mapping->id,
+                'code' => $mapping->xa_phuong_cu_code,
+                'fullName' => $mapping->xaPhuongCu?->full_name,
+                'unitType' => $mapping->xaPhuongCu?->unit_type,
+                'quanHuyen' => $mapping->xaPhuongCu?->quanHuyen ? [
+                    'code' => $mapping->xaPhuongCu->quanHuyen->code,
+                    'fullName' => $mapping->xaPhuongCu->quanHuyen->full_name,
+                ] : null,
+            ];
+        }
+
+        return $this->success(array_values($groups), 'Lấy nhóm liên kết thành công');
+    }
+
+    public function link(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'groupNo' => ['nullable', 'integer'],
+            'xaPhuongMoiCode' => ['required', 'string', 'exists:xa_phuong,code'],
+            'newUnitType' => ['nullable', 'string', 'max:32'],
+            'notes' => ['nullable', 'string'],
+            'xaPhuongCuCodes' => ['required', 'array', 'min:1'],
+            'xaPhuongCuCodes.*' => ['string', 'exists:xa_phuong_cu,code'],
+        ]);
+
+        $result = $this->syncService->linkLegacyToNew(
+            $payload['xaPhuongCuCodes'],
+            $payload['xaPhuongMoiCode'],
+            $payload['groupNo'] ?? null,
+            $payload['newUnitType'] ?? null,
+            $payload['notes'] ?? null,
+        );
+
+        return $this->success($result, 'Liên kết đơn vị hành chính thành công', 201);
+    }
+
+    public function importExcel(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+            'mode' => ['nullable', 'string', 'in:full,mapping-only'],
+        ]);
+
+        $startRow = $request->has('startRow')
+            ? (int) $request->input('startRow')
+            : HanhChinhImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
+        $mode = (string) ($request->input('mode') ?? 'full');
+
+        $import = new HanhChinhLegacyColumnImport($startRow, $columnMap);
+        Excel::import($import, $request->file('file'));
+
+        $rows = $import->rows();
+        if ($rows === []) {
+            return $this->error(
+                'Không đọc được dữ liệu từ file Excel hoặc file rỗng. Kiểm tra dòng bắt đầu và ánh xạ cột.',
+                422,
+            );
+        }
+
+        $counts = $mode === 'mapping-only'
+            ? $this->syncService->importMappingsOnly($rows)
+            : $this->syncService->importLegacyWithMappings($rows);
+
+        return $this->success([
+            ...$counts,
+            'rows' => count($rows),
+        ], 'Import liên kết từ Excel thành công');
+    }
+
+    /**
+     * @return array<string, list<string>>|null
+     */
+    private function parseImportColumnMap(mixed $input): ?array
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return is_array($input) ? $input : null;
     }
 
     public function store(Request $request): JsonResponse

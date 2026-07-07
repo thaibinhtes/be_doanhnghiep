@@ -16,6 +16,7 @@ class XaPhuongResource extends JsonResource
         return [
             'code' => $this->code,
             'fullName' => $this->full_name,
+            'unitType' => $this->unit_type,
             'tinhThanhCode' => $this->tinh_thanh_code,
         ];
     }

@@ -21,13 +21,27 @@ class HanhChinhCodeGenerator
         return 'CU-P-' . substr(md5(mb_strtolower(trim($fullName))), 0, 10);
     }
 
-    public static function districtCode(string $provinceCode, string $fullName, ?string $explicit = null): string
+  public static function districtCode(string $provinceCode, string $fullName, ?string $explicit = null): string
     {
         if ($explicit !== null && $explicit !== '') {
             return $explicit;
         }
 
+        if ($provinceCode === '') {
+            return self::districtCodeStandalone($fullName);
+        }
+
         return 'CU-D-' . substr(md5(mb_strtolower($provinceCode . '|' . trim($fullName))), 0, 10);
+    }
+
+    /** Mã huyện/quận cũ — không phụ thuộc tỉnh (hệ thống chỉ dùng An Giang). */
+    public static function districtCodeStandalone(string $fullName, ?string $explicit = null): string
+    {
+        if ($explicit !== null && $explicit !== '') {
+            return $explicit;
+        }
+
+        return 'CU-D-' . substr(md5(mb_strtolower(trim($fullName))), 0, 10);
     }
 
     public static function wardCode(string $districtCode, string $fullName, ?string $explicit = null): string

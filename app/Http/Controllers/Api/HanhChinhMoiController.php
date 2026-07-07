@@ -2,10 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Imports\HanhChinhNewColumnImport;
+use App\Http\Resources\XaPhuongResource;
+use App\Models\XaPhuong;
+use App\Support\HanhChinhExcelColumns;
+use App\Support\HanhChinhImportColumnMap;
+use App\Support\HanhChinhNewDataClearService;
 use App\Support\HanhChinhSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Maatwebsite\Excel\Facades\Excel;
 
 class HanhChinhMoiController extends ApiController
 {
@@ -13,8 +20,59 @@ class HanhChinhMoiController extends ApiController
     {
     }
 
+    public function indexNewUnits(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        $query = XaPhuong::query()->orderBy('full_name');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('full_name', 'like', "%{$search}%")
+                    ->orWhere('unit_type', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 200);
+
+        return $this->paginated(
+            XaPhuongResource::collection($query->paginate($perPage)),
+            'Lấy danh sách đơn vị hành chính mới thành công',
+        );
+    }
+
+    public function clearPreview(): JsonResponse
+    {
+        return $this->success(
+            HanhChinhNewDataClearService::preview(),
+            'Xem trước xóa dữ liệu hành chính mới',
+        );
+    }
+
+    public function clear(): JsonResponse
+    {
+        $result = HanhChinhNewDataClearService::clear();
+
+        return $this->success($result, 'Đã xóa dữ liệu hành chính mới. Có thể import lại.');
+    }
+
     public function bulkImport(Request $request): JsonResponse
     {
+        if ($request->has('items')) {
+            $payload = $request->validate([
+                'items' => ['required', 'array', 'min:1'],
+                'items.*.xaPhuongMoi' => ['nullable', 'string'],
+                'items.*.xa_phuong_moi' => ['nullable', 'string'],
+                'items.*.loaiMoi' => ['nullable', 'string'],
+                'items.*.loai_moi' => ['nullable', 'string'],
+            ]);
+
+            $counts = $this->syncService->importNewUnitsOnly($payload['items']);
+
+            return $this->success($counts, 'Import đơn vị hành chính mới thành công');
+        }
+
         $payload = $request->validate([
             'provinces' => ['required', 'array', 'min:1'],
             'provinces.*.code' => ['nullable', 'string', 'max:20'],
@@ -30,6 +88,57 @@ class HanhChinhMoiController extends ApiController
         $counts = $this->syncService->importNewAdministrativeData($payload['provinces']);
 
         return $this->success($counts, 'Import dữ liệu hành chính mới thành công');
+    }
+
+    public function importExcel(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+        ]);
+
+        $startRow = $request->has('startRow')
+            ? (int) $request->input('startRow')
+            : HanhChinhImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
+
+        $import = new HanhChinhNewColumnImport($startRow, $columnMap);
+        Excel::import($import, $request->file('file'));
+
+        $rows = $import->rows();
+        if ($rows === []) {
+            return $this->error(
+                'Không đọc được dữ liệu từ file Excel hoặc file rỗng. Kiểm tra dòng bắt đầu và ánh xạ cột (A/B cho file 2 cột, F/G cho file mapping đầy đủ).',
+                422,
+            );
+        }
+
+        $counts = $this->syncService->importNewUnitsOnly($rows);
+
+        return $this->success([
+            ...$counts,
+            'rows' => count($rows),
+        ], 'Import Excel đơn vị hành chính mới thành công');
+    }
+
+    public function importColumnMap(): JsonResponse
+    {
+        $newOnly = HanhChinhImportColumnMap::newOnlyExampleFormat();
+        $newFromMapping = HanhChinhImportColumnMap::newFromMappingExampleFormat();
+
+        return $this->success([
+            'startRow' => $newFromMapping['start_row'],
+            'columnMap' => HanhChinhImportColumnMap::NEW_FROM_MAPPING_COLUMN_MAP,
+            'columnLabels' => HanhChinhExcelColumns::newOnlyColumnLabels(),
+            'standaloneColumnMap' => HanhChinhImportColumnMap::NEW_ONLY_COLUMN_MAP,
+            'mappingColumnMap' => HanhChinhImportColumnMap::NEW_FROM_MAPPING_COLUMN_MAP,
+            'standaloneStartRow' => $newOnly['start_row'],
+            'mappingStartRow' => $newFromMapping['start_row'],
+            'valueExtensions' => [],
+            'defaultConfigCode' => HanhChinhImportColumnMap::NEW_FROM_MAPPING_CONFIG_CODE,
+            'standaloneConfigCode' => HanhChinhImportColumnMap::NEW_ONLY_CONFIG_CODE,
+        ]);
     }
 
     public function importFromDataset(Request $request): JsonResponse
@@ -84,5 +193,23 @@ class HanhChinhMoiController extends ApiController
         $counts = $this->syncService->importNewAdministrativeData($provinces);
 
         return $this->success($counts, 'Import dữ liệu hành chính mới từ dataset thành công');
+    }
+
+    /**
+     * @return array<string, list<string>>|null
+     */
+    private function parseImportColumnMap(mixed $input): ?array
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return is_array($input) ? $input : null;
     }
 }

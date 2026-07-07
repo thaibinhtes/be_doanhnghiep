@@ -41,6 +41,14 @@ class ApiController extends Controller
      */
     protected function paginated(mixed $resource, string $message = 'Success'): JsonResponse
     {
+        if ($resource instanceof \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+            || $resource instanceof \Illuminate\Http\Resources\Json\ResourceCollection) {
+            return $resource->additional([
+                'success' => true,
+                'message' => $message,
+            ])->response();
+        }
+
         return response()->json([
             'success' => true,
             'message' => $message,

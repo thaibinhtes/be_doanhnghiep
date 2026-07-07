@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call(DonViSeeder::class);
         $this->call(DoanhNghiepImportConfigSeeder::class);
         $this->call(HopTacXaImportConfigSeeder::class);
+        $this->call(HanhChinhImportConfigSeeder::class);
         $this->call(DoanhNghiepImportFormatSeeder::class);
         $this->call(DnTrangThaiSeeder::class);
         $this->call(ImportTemplateSettingSeeder::class);

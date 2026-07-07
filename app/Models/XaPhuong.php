@@ -18,6 +18,7 @@ class XaPhuong extends Model
     protected $fillable = [
         'code',
         'full_name',
+        'unit_type',
         'tinh_thanh_code',
     ];
 
