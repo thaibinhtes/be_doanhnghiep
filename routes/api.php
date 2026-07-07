@@ -182,6 +182,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/tax-units', [TaxUnitController::class, 'index']);
     Route::get('/tax-units/import-column-map', [TaxUnitController::class, 'importColumnMap']);
     Route::get('/tax-management/companies', [TaxManagementController::class, 'companyList']);
+    Route::get('/tax-management/import-jobs', [TaxManagementController::class, 'importJobs']);
     Route::get('/tax-management/companies/{doanhNghiep}/payment-history', [TaxManagementController::class, 'companyPaymentHistory']);
     Route::get('/tax-management/companies/import-column-map', [TaxManagementController::class, 'companyImportColumnMap']);
     Route::get('/tax-management/tax-units/{taxUnit}/companies', [TaxManagementController::class, 'companiesByTaxUnit']);

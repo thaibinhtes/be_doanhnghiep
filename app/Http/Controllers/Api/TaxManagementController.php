@@ -8,6 +8,7 @@ use App\Models\CompanyTaxPaymentHistory;
 use App\Models\CooperativeTaxManagement;
 use App\Models\DoanhNghiep;
 use App\Models\HopTacXa;
+use App\Models\TaxImportJob;
 use App\Models\TaxUnit;
 use App\Support\TaxExcelColumns;
 use App\Support\TaxImportColumnMap;
@@ -18,6 +19,54 @@ use Illuminate\Support\Facades\Storage;
 
 class TaxManagementController extends ApiController
 {
+    public function importJobs(Request $request): JsonResponse
+    {
+        $type = (string) $request->query('type', '');
+        $allowedTypes = [TaxImportJob::TYPE_TAX_UNITS, TaxImportJob::TYPE_COMPANY_TAX];
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 20)), 1), 100);
+
+        $query = TaxImportJob::query()
+            ->where('user_id', (int) $request->user()->id)
+            ->orderByDesc('created_at');
+
+        if (in_array($type, $allowedTypes, true)) {
+            $query->where('type', $type);
+        }
+
+        $items = $query->paginate($perPage);
+
+        return $this->success([
+            'data' => $items->getCollection()->map(function (TaxImportJob $item) {
+                $result = is_array($item->result) ? $item->result : [];
+                $imported = (int) ($result['imported'] ?? 0);
+                $duplicates = (int) ($result['duplicates'] ?? $result['updated'] ?? 0);
+                $failed = (int) ($result['failed'] ?? 0);
+                return [
+                    'id' => $item->id,
+                    'type' => $item->type,
+                    'status' => $item->status,
+                    'originalFilename' => $item->original_filename,
+                    'result' => $result,
+                    'summary' => [
+                        'imported' => $imported,
+                        'duplicates' => $duplicates,
+                        'failed' => $failed,
+                    ],
+                    'errorMessage' => $item->error_message,
+                    'createdAt' => $item->created_at?->toIso8601String(),
+                    'startedAt' => $item->started_at?->toIso8601String(),
+                    'finishedAt' => $item->finished_at?->toIso8601String(),
+                ];
+            })->values(),
+            'meta' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ],
+        ], 'Lấy lịch sử import thuế thành công');
+    }
+
     public function companyList(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('search', ''));
