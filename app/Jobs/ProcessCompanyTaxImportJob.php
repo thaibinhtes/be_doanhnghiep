@@ -7,11 +7,13 @@ use App\Models\CompanyTaxManagement;
 use App\Models\CompanyTaxPaymentHistory;
 use App\Models\DoanhNghiep;
 use App\Models\TaxImportJob;
+use App\Models\TaxImportJobRow;
 use App\Models\TaxUnit;
 use App\Models\User;
 use App\Support\ImportSocketNotifier;
 use App\Support\ImportSocketTopics;
 use App\Support\TaxImportColumnMap;
+use App\Support\TaxImportRowRecorder;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -36,7 +38,6 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
-        // Large XLSX files can exceed default 128MB.
         @ini_set('memory_limit', '512M');
 
         $importJob = TaxImportJob::query()->find($this->importJobId);
@@ -71,14 +72,19 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $recorder = new TaxImportRowRecorder($importJob->id, $user->id);
+
         try {
             $startRow = $importJob->start_row ?? TaxImportColumnMap::DEFAULT_START_ROW;
             $columnMap = $importJob->column_map;
 
-            $created = 0;
-            $updated = 0;
-            $skipped = 0;
+            $imported = 0;
+            $duplicates = 0;
+            $failed = 0;
             $paidAt = $importJob->tax_paid_at?->toDateString() ?? now()->toDateString();
+
+            /** @var array<string, true> $seenInFile */
+            $seenInFile = [];
 
             $import = new CompanyTaxColumnImport(
                 $startRow,
@@ -87,97 +93,148 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                     $user,
                     $importJob,
                     $paidAt,
-                    &$created,
-                    &$updated,
-                    &$skipped
+                    $recorder,
+                    &$imported,
+                    &$duplicates,
+                    &$failed,
+                    &$seenInFile
                 ): void {
-                $taxCode = trim((string) ($row['taxCode'] ?? ''));
-                $taxUnitCode = trim((string) ($row['taxUnitCode'] ?? ''));
+                    $taxCode = trim((string) ($row['taxCode'] ?? ''));
+                    $taxUnitCode = trim((string) ($row['taxUnitCode'] ?? ''));
 
-                if ($taxCode === '' || $taxUnitCode === '') {
-                    ImportSocketNotifier::notify(
-                        $user->id,
-                        ImportSocketTopics::EXCEL_ROW_FAILED,
-                        $importJob->id,
+                    if ($taxCode === '' || $taxUnitCode === '') {
+                        $recorder->record(
+                            $excelRow,
+                            TaxImportJobRow::STATUS_FAILED,
+                            $taxCode ?: null,
+                            null,
+                            $taxUnitCode ?: null,
+                            null,
+                            null,
+                            'Thiếu mã doanh nghiệp hoặc ID đơn vị thuế.',
+                        );
+                        $failed++;
+
+                        return;
+                    }
+
+                    $company = DoanhNghiep::query()->where('ma_so_doanh_nghiep', $taxCode)->first();
+                    $taxUnit = $this->resolveTaxUnit($taxUnitCode);
+
+                    if (!$company) {
+                        $recorder->record(
+                            $excelRow,
+                            TaxImportJobRow::STATUS_FAILED,
+                            $taxCode,
+                            null,
+                            $taxUnitCode,
+                            null,
+                            $taxUnit?->id,
+                            'Không tìm thấy doanh nghiệp.',
+                        );
+                        $failed++;
+
+                        return;
+                    }
+
+                    if (!$taxUnit) {
+                        $recorder->record(
+                            $excelRow,
+                            TaxImportJobRow::STATUS_FAILED,
+                            $taxCode,
+                            $company->ten_doanh_nghiep,
+                            $taxUnitCode,
+                            $company->id,
+                            null,
+                            'Không tìm thấy đơn vị thuế.',
+                        );
+                        $failed++;
+
+                        return;
+                    }
+
+                    $dedupeKey = "{$company->id}:{$taxUnit->id}:{$paidAt}";
+                    if (isset($seenInFile[$dedupeKey])) {
+                        $recorder->record(
+                            $excelRow,
+                            TaxImportJobRow::STATUS_DUPLICATE,
+                            $taxCode,
+                            $company->ten_doanh_nghiep,
+                            $taxUnitCode,
+                            $company->id,
+                            $taxUnit->id,
+                            'Trùng dòng trong file import.',
+                        );
+                        $duplicates++;
+
+                        return;
+                    }
+
+                    $seenInFile[$dedupeKey] = true;
+
+                    $alreadyPaid = CompanyTaxPaymentHistory::query()
+                        ->where('doanh_nghiep_id', $company->id)
+                        ->where('tax_unit_id', $taxUnit->id)
+                        ->whereDate('tax_paid_at', $paidAt)
+                        ->exists();
+
+                    if ($alreadyPaid) {
+                        $recorder->record(
+                            $excelRow,
+                            TaxImportJobRow::STATUS_DUPLICATE,
+                            $taxCode,
+                            $company->ten_doanh_nghiep,
+                            $taxUnitCode,
+                            $company->id,
+                            $taxUnit->id,
+                            'Đã có bản ghi đóng thuế cùng ngày.',
+                        );
+                        $duplicates++;
+
+                        return;
+                    }
+
+                    CompanyTaxManagement::query()->updateOrCreate(
+                        ['doanh_nghiep_id' => $company->id],
                         [
-                            'row' => $excelRow,
-                            'entity' => 'company-tax',
-                            'maSoDoanhNghiep' => $taxCode ?: null,
-                            'message' => 'Thiếu mã số thuế hoặc mã đơn vị thuế.',
+                            'tax_code' => $taxCode,
+                            'tax_unit_id' => $taxUnit->id,
+                            'tax_paid_at' => $paidAt,
+                            'imported_by_user_id' => $user->id,
                         ],
                     );
-
-                    $skipped++;
-                    return;
-                }
-
-                $company = DoanhNghiep::query()->where('ma_so_doanh_nghiep', $taxCode)->first();
-                $taxUnit = TaxUnit::query()->where('unit_code', $taxUnitCode)->first();
-
-                if (!$company || !$taxUnit) {
-                    ImportSocketNotifier::notify(
-                        $user->id,
-                        ImportSocketTopics::EXCEL_ROW_FAILED,
-                        $importJob->id,
-                        [
-                            'row' => $excelRow,
-                            'entity' => 'company-tax',
-                            'maSoDoanhNghiep' => $taxCode,
-                            'message' => 'Không tìm thấy doanh nghiệp hoặc đơn vị thuế.',
-                        ],
-                    );
-
-                    $skipped++;
-                    return;
-                }
-
-                $existing = CompanyTaxManagement::query()->where('doanh_nghiep_id', $company->id)->exists();
-                CompanyTaxManagement::query()->updateOrCreate(
-                    ['doanh_nghiep_id' => $company->id],
-                    [
-                        'tax_code' => $taxCode,
+                    CompanyTaxPaymentHistory::query()->create([
+                        'doanh_nghiep_id' => $company->id,
                         'tax_unit_id' => $taxUnit->id,
+                        'tax_code' => $taxCode,
                         'tax_paid_at' => $paidAt,
                         'imported_by_user_id' => $user->id,
-                    ],
-                );
-                CompanyTaxPaymentHistory::query()->create([
-                    'doanh_nghiep_id' => $company->id,
-                    'tax_unit_id' => $taxUnit->id,
-                    'tax_code' => $taxCode,
-                    'tax_paid_at' => $paidAt,
-                    'imported_by_user_id' => $user->id,
-                    'source' => 'import',
-                ]);
+                        'source' => 'import',
+                    ]);
 
-                $this->syncCompanyOperatingStatus($company->id);
-                $existing ? $updated++ : $created++;
+                    $this->syncCompanyOperatingStatus($company->id);
+                    $imported++;
 
-                ImportSocketNotifier::notify(
-                    $user->id,
-                    ImportSocketTopics::EXCEL_ROW_SUCCESS,
-                    $importJob->id,
-                    [
-                        'row' => $excelRow,
-                        'entity' => 'company-tax',
-                        'maSoDoanhNghiep' => $taxCode,
-                        'tenDoanhNghiep' => $company->ten_doanh_nghiep,
-                        'message' => $existing ? 'Đã cập nhật đơn vị thuế.' : 'Đã thêm doanh nghiệp đóng thuế.',
-                    ],
-                );
+                    $recorder->record(
+                        $excelRow,
+                        TaxImportJobRow::STATUS_SUCCESS,
+                        $taxCode,
+                        $company->ten_doanh_nghiep,
+                        $taxUnitCode,
+                        $company->id,
+                        $taxUnit->id,
+                        'Đã tạo bản ghi đóng thuế.',
+                    );
                 },
             );
             Excel::import($import, $absolutePath);
+            $recorder->flush();
 
             $result = [
-                'imported' => $created,
-                'duplicates' => $updated,
-                'updated' => $updated,
-                'failed' => $skipped,
-                'errors' => [],
+                'imported' => $imported,
+                'duplicates' => $duplicates,
+                'failed' => $failed,
                 'rows' => $import->processedRows(),
-                'created' => $created,
-                'skipped' => $skipped,
             ];
 
             $importJob->markCompleted($result);
@@ -188,15 +245,35 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                 [
                     'status' => TaxImportJob::STATUS_COMPLETED,
                     'result' => $result,
-                    'message' => "Import doanh nghiệp đóng thuế hoàn tất: {$created} mới, {$updated} cập nhật, {$skipped} bỏ qua.",
+                    'message' => "Import doanh nghiệp đóng thuế hoàn tất: {$imported} thành công, {$duplicates} trùng, {$failed} thất bại.",
                     'entity' => 'company-tax',
                 ],
             );
         } catch (\Throwable $exception) {
+            $recorder->flush();
             $this->failJob($importJob, $user->id, $exception->getMessage());
         } finally {
             $disk->delete($importJob->file_path);
         }
+    }
+
+    private function resolveTaxUnit(string $code): ?TaxUnit
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $byCode = TaxUnit::query()->where('unit_code', $code)->first();
+        if ($byCode) {
+            return $byCode;
+        }
+
+        if (ctype_digit($code)) {
+            return TaxUnit::query()->find((int) $code);
+        }
+
+        return null;
     }
 
     private function syncCompanyOperatingStatus(int $companyId): void

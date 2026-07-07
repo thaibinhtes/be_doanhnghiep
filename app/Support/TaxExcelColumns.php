@@ -10,7 +10,7 @@ class TaxExcelColumns
     ];
 
     public const COMPANY_TAX_COLUMNS = [
-        'taxCode' => 'Mã số thuế doanh nghiệp',
+        'taxCode' => 'Mã doanh nghiệp',
         'taxUnitCode' => 'ID đơn vị thuế',
     ];
 

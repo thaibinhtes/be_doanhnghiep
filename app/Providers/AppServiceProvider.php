@@ -9,6 +9,7 @@ use App\Models\HanhChinhImportFormat;
 use App\Models\HopTacXa;
 use App\Models\HopTacXaImportFormat;
 use App\Models\HopTacXaImportJob;
+use App\Models\TaxImportJob;
 use App\Observers\DoanhNghiepObserver;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -37,6 +38,10 @@ class AppServiceProvider extends ServiceProvider
 
             if (str_contains($uri, 'hop-tac-xa')) {
                 return HopTacXaImportJob::query()->findOrFail($value);
+            }
+
+            if (str_contains($uri, 'tax-management')) {
+                return TaxImportJob::query()->findOrFail($value);
             }
 
             return DoanhNghiepImportJob::query()->findOrFail($value);

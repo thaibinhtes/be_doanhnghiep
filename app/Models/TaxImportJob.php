@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaxImportJob extends Model
 {
@@ -44,6 +45,11 @@ class TaxImportJob extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function rows(): HasMany
+    {
+        return $this->hasMany(TaxImportJobRow::class, 'import_job_id');
     }
 
     public function markProcessing(): void
