@@ -27,6 +27,7 @@ class TaxImportRowRecorder
         ?int $doanhNghiepId = null,
         ?int $taxUnitId = null,
         ?string $message = null,
+        ?array $mappedValues = null,
     ): void {
         $now = now();
 
@@ -40,6 +41,7 @@ class TaxImportRowRecorder
             'doanh_nghiep_id' => $doanhNghiepId,
             'tax_unit_id' => $taxUnitId,
             'message' => $message,
+            'mapped_values' => $mappedValues !== null ? json_encode($mappedValues, JSON_UNESCAPED_UNICODE) : null,
             'created_at' => $now,
             'updated_at' => $now,
         ];

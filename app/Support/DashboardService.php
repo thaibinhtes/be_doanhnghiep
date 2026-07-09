@@ -23,7 +23,10 @@ class DashboardService
         $companyQuery = DoanhNghiepScopeHelper::query($user);
         $totalCompanies = (clone $companyQuery)->count();
         $identified = (clone $companyQuery)->where('da_cap_nhat_dinh_danh', true)->count();
-        $notIdentified = max(0, $totalCompanies - $identified);
+        $notIdentifiedQuery = (clone $companyQuery)->where('da_cap_nhat_dinh_danh', false);
+        $canRaSoat = (clone $notIdentifiedQuery)->whereHas('taxManagement')->count();
+        $chuaDinhDanh = (clone $notIdentifiedQuery)->whereDoesntHave('taxManagement')->count();
+        $notIdentified = $canRaSoat + $chuaDinhDanh;
         $withCoordinates = (clone $companyQuery)
             ->whereNotNull('long')
             ->whereNotNull('lat')
@@ -38,11 +41,13 @@ class DashboardService
                 'totalCompanies' => $totalCompanies,
                 'identified' => $identified,
                 'notIdentified' => $notIdentified,
+                'canRaSoat' => $canRaSoat,
                 'withCoordinates' => $withCoordinates,
             ],
             'identity' => [
                 'daDinhDanh' => $identified,
-                'chuaDinhDanh' => $notIdentified,
+                'canRaSoat' => $canRaSoat,
+                'chuaDinhDanh' => $chuaDinhDanh,
             ],
             'summary' => $summary,
             'progress' => [

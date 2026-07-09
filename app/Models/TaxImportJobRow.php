@@ -23,7 +23,15 @@ class TaxImportJobRow extends Model
         'doanh_nghiep_id',
         'tax_unit_id',
         'message',
+        'mapped_values',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'mapped_values' => 'array',
+        ];
+    }
 
     public function importJob(): BelongsTo
     {

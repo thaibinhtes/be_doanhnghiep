@@ -85,48 +85,56 @@ class TaxManagementController extends ApiController
         $search = trim((string) $request->query('search', ''));
         $fromDate = $this->parseDateOrNull($request->query('paidFrom'));
         $toDate = $this->parseDateOrNull($request->query('paidTo'));
+        $activeOnly = $request->boolean('activeOnly');
 
-        $query = DoanhNghiep::query()
-            ->with(['taxManagement.taxUnit', 'taxManagement.importedBy'])
-            ->orderBy('ten_doanh_nghiep');
+        $query = CompanyTaxManagement::query()
+            ->with(['doanhNghiep', 'taxUnit', 'importedBy'])
+            ->orderByDesc('created_at');
+
+        if ($activeOnly) {
+            $query->where('is_active', true);
+        }
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search) {
                 $builder
-                    ->where('ten_doanh_nghiep', 'like', "%{$search}%")
-                    ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%");
+                    ->where('tax_code', 'like', "%{$search}%")
+                    ->orWhereHas('doanhNghiep', function ($companyQuery) use ($search) {
+                        $companyQuery
+                            ->where('ten_doanh_nghiep', 'like', "%{$search}%")
+                            ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%");
+                    });
             });
         }
 
-        if ($fromDate || $toDate) {
-            $query->whereHas('taxManagement', function ($builder) use ($fromDate, $toDate) {
-                if ($fromDate) {
-                    $builder->whereDate('tax_paid_at', '>=', $fromDate);
-                }
-                if ($toDate) {
-                    $builder->whereDate('tax_paid_at', '<=', $toDate);
-                }
-            });
+        if ($fromDate) {
+            $query->whereDate('tax_paid_at', '>=', $fromDate);
+        }
+
+        if ($toDate) {
+            $query->whereDate('tax_paid_at', '<=', $toDate);
         }
 
         $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 200);
         $items = $query->paginate($perPage);
 
-        $data = $items->getCollection()->map(function (DoanhNghiep $item) {
+        $data = $items->getCollection()->map(function (CompanyTaxManagement $item) {
             return [
-                'id' => $item->id,
-                'taxCode' => $item->ma_so_doanh_nghiep,
-                'companyName' => $item->ten_doanh_nghiep,
-                'taxUnitId' => $item->taxManagement?->tax_unit_id,
-                'taxUnit' => $item->taxManagement?->taxUnit ? [
-                    'id' => $item->taxManagement->taxUnit->id,
-                    'unitCode' => $item->taxManagement->taxUnit->unit_code,
-                    'unitName' => $item->taxManagement->taxUnit->unit_name,
+                'id' => $item->doanh_nghiep_id,
+                'taxCode' => $item->tax_code ?: $item->doanhNghiep?->ma_so_doanh_nghiep,
+                'companyName' => $item->doanhNghiep?->ten_doanh_nghiep,
+                'taxUnitId' => $item->tax_unit_id,
+                'taxUnit' => $item->taxUnit ? [
+                    'id' => $item->taxUnit->id,
+                    'unitCode' => $item->taxUnit->unit_code,
+                    'unitName' => $item->taxUnit->unit_name,
                 ] : null,
-                'taxPaidAt' => $item->taxManagement?->tax_paid_at?->toDateString(),
-                'importedBy' => $item->taxManagement?->importedBy ? [
-                    'id' => $item->taxManagement->importedBy->id,
-                    'name' => $item->taxManagement->importedBy->name,
+                'taxPaidAt' => $item->tax_paid_at?->toDateString(),
+                'isActive' => (bool) $item->is_active,
+                'createdAt' => $item->created_at?->toIso8601String(),
+                'importedBy' => $item->importedBy ? [
+                    'id' => $item->importedBy->id,
+                    'name' => $item->importedBy->name,
                 ] : null,
             ];
         })->values();
@@ -198,7 +206,6 @@ class TaxManagementController extends ApiController
 
         if (empty($payload['taxUnitId'])) {
             CompanyTaxManagement::query()->where('doanh_nghiep_id', $company->id)->delete();
-            $this->syncCompanyOperatingStatus($company->id);
 
             return $this->success(null, 'Đã bỏ đơn vị thuế cho doanh nghiệp');
         }
@@ -212,6 +219,7 @@ class TaxManagementController extends ApiController
                 'tax_unit_id' => (int) $payload['taxUnitId'],
                 'tax_paid_at' => $taxPaidAt,
                 'imported_by_user_id' => (int) $request->user()->id,
+                'is_active' => true,
             ],
         );
         CompanyTaxPaymentHistory::query()->create([
@@ -222,7 +230,6 @@ class TaxManagementController extends ApiController
             'imported_by_user_id' => (int) $request->user()->id,
             'source' => 'manual',
         ]);
-        $this->syncCompanyOperatingStatus($company->id);
 
         return $this->success(null, 'Cập nhật đơn vị thuế doanh nghiệp thành công');
     }
@@ -378,19 +385,6 @@ class TaxManagementController extends ApiController
             'originalFilename' => $importJob->original_filename,
             'entity' => 'company-tax',
         ], 'Đã đưa file import doanh nghiệp đóng thuế vào hàng đợi.', 202);
-    }
-
-    private function syncCompanyOperatingStatus(int $companyId): void
-    {
-        $hasTaxRecord = CompanyTaxManagement::query()
-            ->where('doanh_nghiep_id', $companyId)
-            ->exists();
-
-        DoanhNghiep::query()
-            ->where('id', $companyId)
-            ->update([
-                'trang_thai' => $hasTaxRecord ? 'Hoạt động' : 'Không hoạt động',
-            ]);
     }
 
     private function parseDateOrNull(mixed $value): ?string

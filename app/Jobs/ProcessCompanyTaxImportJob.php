@@ -75,6 +75,8 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
         $recorder = new TaxImportRowRecorder($importJob->id, $user->id);
 
         try {
+            CompanyTaxManagement::query()->update(['is_active' => false]);
+
             $startRow = $importJob->start_row ?? TaxImportColumnMap::DEFAULT_START_ROW;
             $columnMap = $importJob->column_map;
 
@@ -112,6 +114,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             null,
                             null,
                             'Thiếu mã doanh nghiệp hoặc ID đơn vị thuế.',
+                            $row,
                         );
                         $failed++;
 
@@ -131,6 +134,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             null,
                             $taxUnit?->id,
                             'Không tìm thấy doanh nghiệp.',
+                            $row,
                         );
                         $failed++;
 
@@ -147,6 +151,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             $company->id,
                             null,
                             'Không tìm thấy đơn vị thuế.',
+                            $row,
                         );
                         $failed++;
 
@@ -164,6 +169,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             $company->id,
                             $taxUnit->id,
                             'Trùng dòng trong file import.',
+                            $row,
                         );
                         $duplicates++;
 
@@ -179,6 +185,10 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                         ->exists();
 
                     if ($alreadyPaid) {
+                        CompanyTaxManagement::query()
+                            ->where('doanh_nghiep_id', $company->id)
+                            ->update(['is_active' => true]);
+
                         $recorder->record(
                             $excelRow,
                             TaxImportJobRow::STATUS_DUPLICATE,
@@ -188,6 +198,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             $company->id,
                             $taxUnit->id,
                             'Đã có bản ghi đóng thuế cùng ngày.',
+                            $row,
                         );
                         $duplicates++;
 
@@ -201,6 +212,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             'tax_unit_id' => $taxUnit->id,
                             'tax_paid_at' => $paidAt,
                             'imported_by_user_id' => $user->id,
+                            'is_active' => true,
                         ],
                     );
                     CompanyTaxPaymentHistory::query()->create([
@@ -212,7 +224,6 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                         'source' => 'import',
                     ]);
 
-                    $this->syncCompanyOperatingStatus($company->id);
                     $imported++;
 
                     $recorder->record(
@@ -224,6 +235,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                         $company->id,
                         $taxUnit->id,
                         'Đã tạo bản ghi đóng thuế.',
+                        $row,
                     );
                 },
             );
@@ -274,19 +286,6 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
         }
 
         return null;
-    }
-
-    private function syncCompanyOperatingStatus(int $companyId): void
-    {
-        $hasTaxRecord = CompanyTaxManagement::query()
-            ->where('doanh_nghiep_id', $companyId)
-            ->exists();
-
-        DoanhNghiep::query()
-            ->where('id', $companyId)
-            ->update([
-                'trang_thai' => $hasTaxRecord ? 'Hoạt động' : 'Không hoạt động',
-            ]);
     }
 
     private function failJob(TaxImportJob $importJob, int $userId, string $message): void

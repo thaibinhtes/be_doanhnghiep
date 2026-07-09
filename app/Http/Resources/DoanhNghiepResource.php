@@ -46,6 +46,14 @@ class DoanhNghiepResource extends JsonResource
             'dnTrangThaiId' => $this->dn_trang_thai_id,
             'lyDoTrangThai' => $this->ly_do_trang_thai,
             'dnTrangThai' => $this->whenLoaded('dnTrangThai', fn () => new DnTrangThaiResource($this->dnTrangThai)),
+            'tinhTrangThue' => $this->when(
+                $this->relationLoaded('taxManagement'),
+                fn () => $this->taxManagement !== null ? 'Đang hoạt động' : 'Không hoạt động',
+            ),
+            'hasTaxLink' => $this->when(
+                $this->relationLoaded('taxManagement'),
+                fn () => $this->taxManagement !== null,
+            ),
             'daCapNhatDinhDanh' => (bool) $this->da_cap_nhat_dinh_danh,
             'trangThaiDinhDanh' => $this->da_cap_nhat_dinh_danh ? 'Đã cập nhật định danh' : 'Chưa cập nhật định danh',
             'dienThoai' => $this->dien_thoai,

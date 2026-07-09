@@ -15,12 +15,14 @@ class CompanyTaxManagement extends Model
         'tax_unit_id',
         'tax_paid_at',
         'imported_by_user_id',
+        'is_active',
     ];
 
     protected function casts(): array
     {
         return [
             'tax_paid_at' => 'date',
+            'is_active' => 'boolean',
         ];
     }
 

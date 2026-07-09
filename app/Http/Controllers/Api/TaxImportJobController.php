@@ -48,6 +48,7 @@ class TaxImportJobController extends ApiController
             'doanhNghiepId' => $row->doanh_nghiep_id,
             'taxUnitId' => $row->tax_unit_id,
             'message' => $row->message,
+            'mappedValues' => $row->mapped_values,
             'createdAt' => $row->created_at?->toIso8601String(),
         ];
     }
