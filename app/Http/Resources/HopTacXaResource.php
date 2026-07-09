@@ -38,6 +38,16 @@ class HopTacXaResource extends JsonResource
                 fn () => $this->donVi?->ten
             ),
             'donVi' => $this->whenLoaded('donVi', fn () => new DonViResource($this->donVi)),
+            'tinhTrangThue' => $this->when(
+                $this->relationLoaded('taxManagement'),
+                fn () => $this->taxManagement?->is_active
+                    ? 'Đang hoạt động'
+                    : ($this->taxManagement !== null ? 'Ngừng hoạt động' : 'Không hoạt động'),
+            ),
+            'hasTaxLink' => $this->when(
+                $this->relationLoaded('taxManagement'),
+                fn () => $this->taxManagement !== null && (bool) $this->taxManagement->is_active,
+            ),
             'createdByUserId' => $this->created_by_user_id,
             'createdByUser' => $this->whenLoaded('createdByUser', fn () => new UserResource($this->createdByUser)),
             'createdAt' => $this->created_at?->toIso8601String(),

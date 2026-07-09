@@ -288,7 +288,7 @@ class HopTacXaController extends ApiController
         $user = request()->user();
         $requestedDonViId = request()->filled('donViId') ? (int) request('donViId') : null;
         $query = HopTacXaScopeHelper::query($user)
-            ->with(['donVi', 'createdByUser']);
+            ->with(['donVi', 'createdByUser', 'taxManagement']);
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = HopTacXaScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
