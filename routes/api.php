@@ -191,6 +191,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/tax-management/companies/import-column-map', [TaxManagementController::class, 'companyImportColumnMap']);
     Route::get('/tax-management/tax-units/{taxUnit}/companies', [TaxManagementController::class, 'companiesByTaxUnit']);
     Route::get('/tax-management/cooperatives', [TaxManagementController::class, 'cooperativeList']);
+    Route::get('/tax-management/cooperatives/import-column-map', [TaxManagementController::class, 'cooperativeImportColumnMap']);
     Route::middleware('permission:feature.org-units.manage')->group(function () {
         Route::post('/tax-units', [TaxUnitController::class, 'store']);
         Route::post('/tax-units/import-excel', [TaxUnitController::class, 'importExcel']);
@@ -200,6 +201,7 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/tax-management/companies', [TaxManagementController::class, 'upsertCompany']);
         Route::post('/tax-management/companies/import-excel', [TaxManagementController::class, 'importCompanyExcel']);
         Route::post('/tax-management/cooperatives', [TaxManagementController::class, 'upsertCooperative']);
+        Route::post('/tax-management/cooperatives/import-excel', [TaxManagementController::class, 'importCooperativeExcel']);
     });
 
     Route::apiResource('members', MemberController::class);

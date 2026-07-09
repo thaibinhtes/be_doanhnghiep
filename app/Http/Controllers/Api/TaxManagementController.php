@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Jobs\ProcessCompanyTaxImportJob;
+use App\Jobs\ProcessCooperativeTaxImportJob;
 use App\Models\CompanyTaxManagement;
 use App\Models\CompanyTaxPaymentHistory;
 use App\Models\CooperativeTaxManagement;
@@ -23,7 +24,7 @@ class TaxManagementController extends ApiController
     public function importJobs(Request $request): JsonResponse
     {
         $type = (string) $request->query('type', '');
-        $allowedTypes = [TaxImportJob::TYPE_TAX_UNITS, TaxImportJob::TYPE_COMPANY_TAX];
+        $allowedTypes = [TaxImportJob::TYPE_TAX_UNITS, TaxImportJob::TYPE_COMPANY_TAX, TaxImportJob::TYPE_COOPERATIVE_TAX];
         $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 20)), 1), 100);
 
         $query = ImportJobScopeHelper::applyScope(
@@ -153,32 +154,58 @@ class TaxManagementController extends ApiController
     public function cooperativeList(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('search', ''));
+        $fromDate = $this->parseDateOrNull($request->query('paidFrom'));
+        $toDate = $this->parseDateOrNull($request->query('paidTo'));
+        $activeOnly = $request->boolean('activeOnly');
 
-        $query = HopTacXa::query()
-            ->with(['taxManagement.taxUnit'])
-            ->orderBy('ten_htx');
+        $query = CooperativeTaxManagement::query()
+            ->with(['hopTacXa', 'taxUnit', 'importedBy'])
+            ->orderByDesc('created_at');
+
+        if ($activeOnly) {
+            $query->where('is_active', true);
+        }
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search) {
                 $builder
-                    ->where('ten_htx', 'like', "%{$search}%")
-                    ->orWhere('ma_so_thue', 'like', "%{$search}%");
+                    ->where('tax_code', 'like', "%{$search}%")
+                    ->orWhereHas('hopTacXa', function ($cooperativeQuery) use ($search) {
+                        $cooperativeQuery
+                            ->where('ten_htx', 'like', "%{$search}%")
+                            ->orWhere('ma_so_thue', 'like', "%{$search}%");
+                    });
             });
+        }
+
+        if ($fromDate) {
+            $query->whereDate('tax_paid_at', '>=', $fromDate);
+        }
+
+        if ($toDate) {
+            $query->whereDate('tax_paid_at', '<=', $toDate);
         }
 
         $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 200);
         $items = $query->paginate($perPage);
 
-        $data = $items->getCollection()->map(function (HopTacXa $item) {
+        $data = $items->getCollection()->map(function (CooperativeTaxManagement $item) {
             return [
-                'id' => $item->id,
-                'taxCode' => $item->ma_so_thue,
-                'cooperativeName' => $item->ten_htx,
-                'taxUnitId' => $item->taxManagement?->tax_unit_id,
-                'taxUnit' => $item->taxManagement?->taxUnit ? [
-                    'id' => $item->taxManagement->taxUnit->id,
-                    'unitCode' => $item->taxManagement->taxUnit->unit_code,
-                    'unitName' => $item->taxManagement->taxUnit->unit_name,
+                'id' => $item->hop_tac_xa_id,
+                'taxCode' => $item->tax_code ?: $item->hopTacXa?->ma_so_thue,
+                'cooperativeName' => $item->hopTacXa?->ten_htx,
+                'taxUnitId' => $item->tax_unit_id,
+                'taxUnit' => $item->taxUnit ? [
+                    'id' => $item->taxUnit->id,
+                    'unitCode' => $item->taxUnit->unit_code,
+                    'unitName' => $item->taxUnit->unit_name,
+                ] : null,
+                'taxPaidAt' => $item->tax_paid_at?->toDateString(),
+                'isActive' => (bool) $item->is_active,
+                'createdAt' => $item->created_at?->toIso8601String(),
+                'importedBy' => $item->importedBy ? [
+                    'id' => $item->importedBy->id,
+                    'name' => $item->importedBy->name,
                 ] : null,
             ];
         })->values();
@@ -385,6 +412,54 @@ class TaxManagementController extends ApiController
             'originalFilename' => $importJob->original_filename,
             'entity' => 'company-tax',
         ], 'Đã đưa file import doanh nghiệp đóng thuế vào hàng đợi.', 202);
+    }
+
+    public function cooperativeImportColumnMap(): JsonResponse
+    {
+        return $this->success([
+            'startRow' => TaxImportColumnMap::DEFAULT_START_ROW,
+            'columnMap' => TaxImportColumnMap::COOPERATIVE_TAX_COLUMN_MAP,
+            'columnLabels' => TaxExcelColumns::cooperativeTaxColumnLabels(),
+            'valueExtensions' => [],
+        ]);
+    }
+
+    public function importCooperativeExcel(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+            'taxPaidAt' => ['nullable', 'date'],
+        ]);
+
+        $startRow = $request->has('startRow') ? (int) $request->input('startRow') : TaxImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
+        $taxPaidAt = $this->parseDateOrNull($request->input('taxPaidAt')) ?? now()->toDateString();
+
+        $uploadedFile = $request->file('file');
+        $storedPath = $uploadedFile->store('imports/pending');
+
+        $importJob = TaxImportJob::query()->create([
+            'user_id' => (int) $request->user()->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId($request->user()),
+            'status' => TaxImportJob::STATUS_PENDING,
+            'type' => TaxImportJob::TYPE_COOPERATIVE_TAX,
+            'file_path' => $storedPath,
+            'original_filename' => $uploadedFile->getClientOriginalName(),
+            'start_row' => $startRow,
+            'tax_paid_at' => $taxPaidAt,
+            'column_map' => $columnMap,
+        ]);
+
+        ProcessCooperativeTaxImportJob::dispatch($importJob->id);
+
+        return $this->success([
+            'importJobId' => $importJob->id,
+            'status' => $importJob->status,
+            'originalFilename' => $importJob->original_filename,
+            'entity' => 'cooperative-tax',
+        ], 'Đã đưa file import hợp tác xã đóng thuế vào hàng đợi.', 202);
     }
 
     private function parseDateOrNull(mixed $value): ?string
