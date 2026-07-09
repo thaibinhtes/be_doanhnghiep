@@ -2,10 +2,10 @@
 
 namespace App\Jobs;
 
-use App\Imports\CompanyTaxColumnImport;
-use App\Models\CompanyTaxManagement;
-use App\Models\CompanyTaxPaymentHistory;
-use App\Models\DoanhNghiep;
+use App\Imports\CooperativeTaxColumnImport;
+use App\Models\CooperativeTaxManagement;
+use App\Models\CooperativeTaxPaymentHistory;
+use App\Models\HopTacXa;
 use App\Models\TaxImportJob;
 use App\Models\TaxImportJobRow;
 use App\Models\TaxUnit;
@@ -20,7 +20,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
-class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
+class ProcessCooperativeTaxImportJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -33,7 +33,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return 'company-tax-import-' . $this->importJobId;
+        return 'cooperative-tax-import-' . $this->importJobId;
     }
 
     public function handle(): void
@@ -60,7 +60,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
             [
                 'status' => TaxImportJob::STATUS_PROCESSING,
                 'originalFilename' => $importJob->original_filename,
-                'entity' => 'company-tax',
+                'entity' => 'cooperative-tax',
             ],
         );
 
@@ -72,10 +72,10 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $recorder = new TaxImportRowRecorder($importJob->id, $user->id);
+        $recorder = new TaxImportRowRecorder($importJob->id, $user->id, 'cooperative-tax');
 
         try {
-            CompanyTaxManagement::query()->update(['is_active' => false]);
+            CooperativeTaxManagement::query()->update(['is_active' => false]);
 
             $startRow = $importJob->start_row ?? TaxImportColumnMap::DEFAULT_START_ROW;
             $columnMap = $importJob->column_map;
@@ -88,12 +88,11 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
             /** @var array<string, true> $seenInFile */
             $seenInFile = [];
 
-            $import = new CompanyTaxColumnImport(
+            $import = new CooperativeTaxColumnImport(
                 $startRow,
                 $columnMap,
                 function (array $row, int $excelRow) use (
                     $user,
-                    $importJob,
                     $paidAt,
                     $recorder,
                     &$imported,
@@ -121,10 +120,10 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                         return;
                     }
 
-                    $company = DoanhNghiep::query()->where('ma_so_doanh_nghiep', $taxCode)->first();
+                    $cooperative = HopTacXa::query()->where('ma_so_thue', $taxCode)->first();
                     $taxUnit = $this->resolveTaxUnit($taxUnitCode);
 
-                    if (!$company) {
+                    if (!$cooperative) {
                         $recorder->record(
                             $excelRow,
                             TaxImportJobRow::STATUS_FAILED,
@@ -133,8 +132,9 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             $taxUnitCode,
                             null,
                             $taxUnit?->id,
-                            $this->taxRowLogMessage('Không tìm thấy doanh nghiệp', $taxCode, $taxUnitCode),
+                            $this->taxRowLogMessage('Không tìm thấy hợp tác xã', $taxCode, $taxUnitCode),
                             $row,
+                            null,
                         );
                         $failed++;
 
@@ -146,30 +146,32 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             $excelRow,
                             TaxImportJobRow::STATUS_FAILED,
                             $taxCode,
-                            $company->ten_doanh_nghiep,
+                            $cooperative->ten_htx,
                             $taxUnitCode,
-                            $company->id,
+                            null,
                             null,
                             $this->taxRowLogMessage('Không tìm thấy đơn vị thuế', $taxCode, $taxUnitCode),
                             $row,
+                            $cooperative->id,
                         );
                         $failed++;
 
                         return;
                     }
 
-                    $dedupeKey = "{$company->id}:{$taxUnit->id}:{$paidAt}";
+                    $dedupeKey = "{$cooperative->id}:{$taxUnit->id}:{$paidAt}";
                     if (isset($seenInFile[$dedupeKey])) {
                         $recorder->record(
                             $excelRow,
                             TaxImportJobRow::STATUS_DUPLICATE,
                             $taxCode,
-                            $company->ten_doanh_nghiep,
+                            $cooperative->ten_htx,
                             $taxUnitCode,
-                            $company->id,
+                            null,
                             $taxUnit->id,
                             'Trùng dòng trong file import.',
                             $row,
+                            $cooperative->id,
                         );
                         $duplicates++;
 
@@ -178,35 +180,36 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
 
                     $seenInFile[$dedupeKey] = true;
 
-                    $alreadyPaid = CompanyTaxPaymentHistory::query()
-                        ->where('doanh_nghiep_id', $company->id)
+                    $alreadyPaid = CooperativeTaxPaymentHistory::query()
+                        ->where('hop_tac_xa_id', $cooperative->id)
                         ->where('tax_unit_id', $taxUnit->id)
                         ->whereDate('tax_paid_at', $paidAt)
                         ->exists();
 
                     if ($alreadyPaid) {
-                        CompanyTaxManagement::query()
-                            ->where('doanh_nghiep_id', $company->id)
+                        CooperativeTaxManagement::query()
+                            ->where('hop_tac_xa_id', $cooperative->id)
                             ->update(['is_active' => true]);
 
                         $recorder->record(
                             $excelRow,
                             TaxImportJobRow::STATUS_DUPLICATE,
                             $taxCode,
-                            $company->ten_doanh_nghiep,
+                            $cooperative->ten_htx,
                             $taxUnitCode,
-                            $company->id,
+                            null,
                             $taxUnit->id,
                             'Đã có bản ghi đóng thuế cùng ngày.',
                             $row,
+                            $cooperative->id,
                         );
                         $duplicates++;
 
                         return;
                     }
 
-                    CompanyTaxManagement::query()->updateOrCreate(
-                        ['doanh_nghiep_id' => $company->id],
+                    CooperativeTaxManagement::query()->updateOrCreate(
+                        ['hop_tac_xa_id' => $cooperative->id],
                         [
                             'tax_code' => $taxCode,
                             'tax_unit_id' => $taxUnit->id,
@@ -215,8 +218,8 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                             'is_active' => true,
                         ],
                     );
-                    CompanyTaxPaymentHistory::query()->create([
-                        'doanh_nghiep_id' => $company->id,
+                    CooperativeTaxPaymentHistory::query()->create([
+                        'hop_tac_xa_id' => $cooperative->id,
                         'tax_unit_id' => $taxUnit->id,
                         'tax_code' => $taxCode,
                         'tax_paid_at' => $paidAt,
@@ -230,12 +233,13 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                         $excelRow,
                         TaxImportJobRow::STATUS_SUCCESS,
                         $taxCode,
-                        $company->ten_doanh_nghiep,
+                        $cooperative->ten_htx,
                         $taxUnitCode,
-                        $company->id,
+                        null,
                         $taxUnit->id,
                         'Đã tạo bản ghi đóng thuế.',
                         $row,
+                        $cooperative->id,
                     );
                 },
             );
@@ -257,8 +261,8 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
                 [
                     'status' => TaxImportJob::STATUS_COMPLETED,
                     'result' => $result,
-                    'message' => "Import doanh nghiệp đóng thuế hoàn tất: {$imported} thành công, {$duplicates} trùng, {$failed} thất bại.",
-                    'entity' => 'company-tax',
+                    'message' => "Import hợp tác xã đóng thuế hoàn tất: {$imported} thành công, {$duplicates} trùng, {$failed} thất bại.",
+                    'entity' => 'cooperative-tax',
                 ],
             );
         } catch (\Throwable $exception) {
@@ -306,7 +310,7 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
             [
                 'status' => TaxImportJob::STATUS_FAILED,
                 'message' => $message,
-                'entity' => 'company-tax',
+                'entity' => 'cooperative-tax',
             ],
         );
     }

@@ -15,6 +15,7 @@ class TaxImportJob extends Model
 
     public const TYPE_TAX_UNITS = 'tax_units';
     public const TYPE_COMPANY_TAX = 'company_tax';
+    public const TYPE_COOPERATIVE_TAX = 'cooperative_tax';
 
     protected $fillable = [
         'user_id',

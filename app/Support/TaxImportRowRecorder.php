@@ -28,6 +28,7 @@ class TaxImportRowRecorder
         ?int $taxUnitId = null,
         ?string $message = null,
         ?array $mappedValues = null,
+        ?int $hopTacXaId = null,
     ): void {
         $now = now();
 
@@ -39,6 +40,7 @@ class TaxImportRowRecorder
             'ten_doanh_nghiep' => $tenDoanhNghiep,
             'tax_unit_code' => $taxUnitCode,
             'doanh_nghiep_id' => $doanhNghiepId,
+            'hop_tac_xa_id' => $hopTacXaId,
             'tax_unit_id' => $taxUnitId,
             'message' => $message,
             'mapped_values' => $mappedValues !== null ? json_encode($mappedValues, JSON_UNESCAPED_UNICODE) : null,
@@ -51,7 +53,7 @@ class TaxImportRowRecorder
             $status,
             $maSoDoanhNghiep,
             $tenDoanhNghiep,
-            $doanhNghiepId,
+            $doanhNghiepId ?? $hopTacXaId,
             $message,
         );
 

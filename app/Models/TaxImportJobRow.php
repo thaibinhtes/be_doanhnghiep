@@ -21,6 +21,7 @@ class TaxImportJobRow extends Model
         'ten_doanh_nghiep',
         'tax_unit_code',
         'doanh_nghiep_id',
+        'hop_tac_xa_id',
         'tax_unit_id',
         'message',
         'mapped_values',
@@ -41,6 +42,11 @@ class TaxImportJobRow extends Model
     public function doanhNghiep(): BelongsTo
     {
         return $this->belongsTo(DoanhNghiep::class);
+    }
+
+    public function hopTacXa(): BelongsTo
+    {
+        return $this->belongsTo(HopTacXa::class, 'hop_tac_xa_id');
     }
 
     public function taxUnit(): BelongsTo

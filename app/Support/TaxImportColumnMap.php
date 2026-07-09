@@ -7,7 +7,8 @@ class TaxImportColumnMap
     public const DEFAULT_START_ROW = 4;
 
     public const TAX_UNIT_END_COLUMN = 'C';
-    public const COMPANY_TAX_END_COLUMN = 'B';
+    public const COMPANY_TAX_END_COLUMN = 'D';
+    public const COOPERATIVE_TAX_END_COLUMN = 'D';
 
     /** @var array<string, list<string>> */
     public const TAX_UNIT_COLUMN_MAP = [
@@ -17,8 +18,14 @@ class TaxImportColumnMap
 
     /** @var array<string, list<string>> */
     public const COMPANY_TAX_COLUMN_MAP = [
-        'taxCode' => ['A'],
         'taxUnitCode' => ['B'],
+        'taxCode' => ['D'],
+    ];
+
+    /** @var array<string, list<string>> */
+    public const COOPERATIVE_TAX_COLUMN_MAP = [
+        'taxUnitCode' => ['B'],
+        'taxCode' => ['D'],
     ];
 
     /**
@@ -42,6 +49,19 @@ class TaxImportColumnMap
     {
         if ($customMap === null || $customMap === []) {
             return self::COMPANY_TAX_COLUMN_MAP;
+        }
+
+        return self::normalizeStoredColumnMap($customMap);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $customMap
+     * @return array<string, list<string>>
+     */
+    public static function resolveCooperativeTax(?array $customMap = null): array
+    {
+        if ($customMap === null || $customMap === []) {
+            return self::COOPERATIVE_TAX_COLUMN_MAP;
         }
 
         return self::normalizeStoredColumnMap($customMap);
@@ -169,6 +189,14 @@ class TaxImportColumnMap
     }
 
     /**
+     * @param  array<string, mixed>  $data
+     */
+    public static function isEmptyCooperativeTaxRow(array $data): bool
+    {
+        return ($data['taxCode'] ?? '') === '' && ($data['taxUnitCode'] ?? '') === '';
+    }
+
+    /**
      * @param  array<int, mixed>  $row
      * @param  list<string>  $columns
      */
@@ -245,5 +273,27 @@ class TaxImportColumnMap
         }
 
         return $letter;
+    }
+
+    /**
+     * @param  array<string, list<string>>  $columnMap
+     */
+    public static function resolveEndColumn(array $columnMap, string $fallback = 'B'): string
+    {
+        $maxIndex = -1;
+        foreach ($columnMap as $columns) {
+            foreach ($columns as $column) {
+                $index = self::columnLetterToIndex((string) $column);
+                if ($index > $maxIndex) {
+                    $maxIndex = $index;
+                }
+            }
+        }
+
+        if ($maxIndex < 0) {
+            return $fallback;
+        }
+
+        return self::columnIndexToLetter($maxIndex);
     }
 }

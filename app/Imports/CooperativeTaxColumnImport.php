@@ -10,7 +10,7 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithColumnLimit;
 use Maatwebsite\Excel\Concerns\WithStartRow;
 
-class CompanyTaxColumnImport implements ToCollection, WithStartRow, WithColumnLimit, WithChunkReading
+class CooperativeTaxColumnImport implements ToCollection, WithStartRow, WithColumnLimit, WithChunkReading
 {
     use RemembersChunkOffset;
 
@@ -36,7 +36,7 @@ class CompanyTaxColumnImport implements ToCollection, WithStartRow, WithColumnLi
         ?array $columnMap = null,
         ?callable $onRow = null,
     ) {
-        $this->columnMap = TaxImportColumnMap::resolveCompanyTax($columnMap);
+        $this->columnMap = TaxImportColumnMap::resolveCooperativeTax($columnMap);
         $this->onRow = $onRow;
     }
 
@@ -47,7 +47,7 @@ class CompanyTaxColumnImport implements ToCollection, WithStartRow, WithColumnLi
             $rowArray = $row instanceof Collection ? $row->all() : (array) $row;
             $parsed = TaxImportColumnMap::parseRow($rowArray, $this->columnMap);
 
-            if (TaxImportColumnMap::isEmptyCompanyTaxRow($parsed)) {
+            if (TaxImportColumnMap::isEmptyCooperativeTaxRow($parsed)) {
                 continue;
             }
 
@@ -72,7 +72,7 @@ class CompanyTaxColumnImport implements ToCollection, WithStartRow, WithColumnLi
     {
         return TaxImportColumnMap::resolveEndColumn(
             $this->columnMap,
-            TaxImportColumnMap::COMPANY_TAX_END_COLUMN,
+            TaxImportColumnMap::COOPERATIVE_TAX_END_COLUMN,
         );
     }
 

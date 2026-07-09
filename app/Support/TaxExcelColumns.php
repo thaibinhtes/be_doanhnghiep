@@ -10,8 +10,13 @@ class TaxExcelColumns
     ];
 
     public const COMPANY_TAX_COLUMNS = [
-        'taxCode' => 'Mã doanh nghiệp',
         'taxUnitCode' => 'ID đơn vị thuế',
+        'taxCode' => 'Mã số thuế (MST)',
+    ];
+
+    public const COOPERATIVE_TAX_COLUMNS = [
+        'taxUnitCode' => 'ID đơn vị thuế',
+        'taxCode' => 'Mã số thuế (MST)',
     ];
 
     public static function taxUnitColumnLabels(): array
@@ -22,5 +27,10 @@ class TaxExcelColumns
     public static function companyTaxColumnLabels(): array
     {
         return self::COMPANY_TAX_COLUMNS;
+    }
+
+    public static function cooperativeTaxColumnLabels(): array
+    {
+        return self::COOPERATIVE_TAX_COLUMNS;
     }
 }

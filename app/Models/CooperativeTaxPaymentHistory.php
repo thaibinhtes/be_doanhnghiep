@@ -5,24 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class CooperativeTaxManagement extends Model
+class CooperativeTaxPaymentHistory extends Model
 {
-    protected $table = 'cooperative_tax_managements';
+    protected $table = 'cooperative_tax_payment_histories';
 
     protected $fillable = [
         'hop_tac_xa_id',
-        'tax_code',
         'tax_unit_id',
+        'tax_code',
         'tax_paid_at',
         'imported_by_user_id',
-        'is_active',
+        'source',
     ];
 
     protected function casts(): array
     {
         return [
             'tax_paid_at' => 'date',
-            'is_active' => 'boolean',
         ];
     }
 
