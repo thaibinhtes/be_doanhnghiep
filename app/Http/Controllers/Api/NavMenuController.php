@@ -18,6 +18,8 @@ class NavMenuController extends ApiController
         $user = $request->user();
         abort_unless($user, 401);
 
+        $user->loadMissing('role.permissions');
+
         return $this->success(
             $this->navMenuService->treeForUser($user),
             'Lấy menu thành công',
@@ -80,7 +82,7 @@ class NavMenuController extends ApiController
                 'total' => $this->navMenuService->count(),
                 'tree' => $this->navMenuService->adminTree(),
             ],
-            'Đồng bộ menu mặc định thành công',
+            'Đồng bộ menu mặc định thành công (giữ tên và thứ tự đã cấu hình)',
         );
     }
 }

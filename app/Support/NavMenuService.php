@@ -21,6 +21,10 @@ class NavMenuService
         if ($this->count() === 0 || !$this->hasAllRegistryKeys()) {
             $this->syncFromRegistry();
         }
+
+        if ($this->isStructureBroken()) {
+            $this->repairStructureFromRegistry();
+        }
     }
 
     public function hasAllRegistryKeys(): bool
@@ -44,7 +48,61 @@ class NavMenuService
         DB::transaction(function () {
             $this->syncNodes(NavMenuRegistry::tree(), null);
             $this->deactivateOrphanItems();
+            $this->repairStructureFromRegistry();
         });
+    }
+
+    public function repairStructureFromRegistry(): void
+    {
+        $this->applyStructure(NavMenuRegistry::tree(), null);
+    }
+
+    private function isStructureBroken(): bool
+    {
+        $expectedRoots = count(NavMenuRegistry::tree());
+        $rootCount = NavMenuItem::query()->where('is_active', true)->whereNull('parent_id')->count();
+
+        return $rootCount < $expectedRoots || $this->hasOrphanedActiveItems();
+    }
+
+    private function hasOrphanedActiveItems(): bool
+    {
+        $activeIds = NavMenuItem::query()->where('is_active', true)->pluck('id');
+
+        return NavMenuItem::query()
+            ->where('is_active', true)
+            ->whereNotNull('parent_id')
+            ->whereNotIn('parent_id', $activeIds)
+            ->exists();
+    }
+
+    /**
+     * Khôi phục parent_id theo registry — giữ nguyên label và sort_order.
+     *
+     * @param array<int, array<string, mixed>> $nodes
+     */
+    private function applyStructure(array $nodes, ?int $parentId): void
+    {
+        foreach ($nodes as $node) {
+            $item = NavMenuItem::query()
+                ->where('item_key', $node['item_key'])
+                ->where('is_active', true)
+                ->first();
+
+            if (!$item) {
+                continue;
+            }
+
+            $expectedParentId = ($item->is_dashboard ?? false) ? null : $parentId;
+
+            if ((int) ($item->parent_id ?? 0) !== (int) ($expectedParentId ?? 0)) {
+                $item->update(['parent_id' => $expectedParentId]);
+            }
+
+            if (!empty($node['children'])) {
+                $this->applyStructure($node['children'], $item->id);
+            }
+        }
     }
 
     /** Ẩn mục cũ không còn trong registry (không xóa dữ liệu). */
@@ -141,8 +199,15 @@ class NavMenuService
     {
         $this->ensureSynced();
 
+        $user->loadMissing('role.permissions');
+
         $items = $this->allActiveItems();
         $tree = $this->buildTree($items);
+
+        if (RoleHierarchyHelper::isRootUser($user)) {
+            return $this->ensureDashboardFirst($tree);
+        }
+
         $filtered = $this->filterTree($tree, $user);
 
         return $this->ensureDashboardFirst($filtered);
@@ -165,7 +230,13 @@ class NavMenuService
     private function buildTree(Collection $items, ?int $parentId = null): array
     {
         return $items
-            ->where('parent_id', $parentId)
+            ->filter(function (NavMenuItem $item) use ($parentId) {
+                if ($parentId === null) {
+                    return $item->parent_id === null;
+                }
+
+                return (int) $item->parent_id === (int) $parentId;
+            })
             ->sortBy('sort_order')
             ->values()
             ->map(fn (NavMenuItem $item) => $this->nodePayload($item, $this->buildTree($items, $item->id)))
