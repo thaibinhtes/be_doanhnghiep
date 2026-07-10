@@ -88,6 +88,22 @@ class DoanhNghiepScopeHelper
     }
 
     /**
+     * Đơn vị lọc từ query; user thuộc đơn vị thì mặc định đơn vị trực thuộc.
+     */
+    public static function resolveRequestedDonViFilterId(?User $user): ?int
+    {
+        if (request()->filled('donViId')) {
+            return (int) request('donViId');
+        }
+
+        if ($user !== null && ! self::hasUnrestrictedScope($user) && $user->don_vi_id !== null) {
+            return (int) $user->don_vi_id;
+        }
+
+        return null;
+    }
+
+    /**
      * @return array<int, int>|null
      */
     public static function resolveDonViFilterIds(?User $user, ?int $requestedDonViId): ?array

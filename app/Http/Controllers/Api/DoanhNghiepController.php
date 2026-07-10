@@ -622,7 +622,7 @@ class DoanhNghiepController extends ApiController
     private function buildFilteredQuery(): Builder
     {
         $user = request()->user();
-        $requestedDonViId = request()->filled('donViId') ? (int) request('donViId') : null;
+        $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
         $query = DoanhNghiepScopeHelper::query($user)
             ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'quanHuyenCu', 'tinhThanh', 'taxManagement']);
 

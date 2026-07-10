@@ -24,6 +24,14 @@ class DnDinhDanhLichSuResource extends JsonResource
             'nguonLabel' => $this->nguonLabel(),
             'ghiChu' => $this->ghi_chu,
             'createdAt' => $this->created_at?->toIso8601String(),
+            'donViTen' => $this->when(
+                $this->relationLoaded('doanhNghiep') && $this->doanhNghiep?->relationLoaded('donVi'),
+                fn () => $this->doanhNghiep?->donVi?->ten
+            ),
+            'donViMa' => $this->when(
+                $this->relationLoaded('doanhNghiep') && $this->doanhNghiep?->relationLoaded('donVi'),
+                fn () => $this->doanhNghiep?->donVi?->ma
+            ),
         ];
     }
 

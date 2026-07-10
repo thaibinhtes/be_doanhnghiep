@@ -9,6 +9,7 @@ class DashboardService
 {
     public function __construct(
         private readonly BaoCaoTongHopService $baoCaoTongHopService,
+        private readonly BaoCaoTongHopHtxService $baoCaoTongHopHtxService,
         private readonly BaoCaoTienDoDinhDanhService $tienDoService,
     ) {}
 
@@ -18,6 +19,7 @@ class DashboardService
     public function build(?User $user = null): array
     {
         $summary = $this->baoCaoTongHopService->build($user);
+        $cooperativeSummary = $this->baoCaoTongHopHtxService->build($user);
         $progress = $this->tienDoService->build([], $user);
 
         $companyQuery = DoanhNghiepScopeHelper::query($user);
@@ -30,6 +32,18 @@ class DashboardService
         $withCoordinates = (clone $companyQuery)
             ->whereNotNull('long')
             ->whereNotNull('lat')
+            ->count();
+
+        $cooperativeQuery = HopTacXaScopeHelper::query($user);
+        $totalCooperatives = (clone $cooperativeQuery)->count();
+        $cooperativeDaDinhDanh = (clone $cooperativeQuery)
+            ->whereHas('taxManagement', fn ($query) => $query->where('is_active', true))
+            ->count();
+        $cooperativeCanRaSoat = (clone $cooperativeQuery)
+            ->whereHas('taxManagement', fn ($query) => $query->where('is_active', false))
+            ->count();
+        $cooperativeChuaDinhDanh = (clone $cooperativeQuery)
+            ->whereDoesntHave('taxManagement')
             ->count();
 
         $progressTotalRow = collect($progress['rows'] ?? [])
@@ -49,7 +63,16 @@ class DashboardService
                 'canRaSoat' => $canRaSoat,
                 'chuaDinhDanh' => $chuaDinhDanh,
             ],
+            'cooperativeOverview' => [
+                'totalCooperatives' => $totalCooperatives,
+            ],
+            'cooperativeIdentity' => [
+                'daDinhDanh' => $cooperativeDaDinhDanh,
+                'canRaSoat' => $cooperativeCanRaSoat,
+                'chuaDinhDanh' => $cooperativeChuaDinhDanh,
+            ],
             'summary' => $summary,
+            'cooperativeSummary' => $cooperativeSummary,
             'progress' => [
                 'title' => $progress['title'] ?? '',
                 'reportDateLabel' => $progress['reportDateLabel'] ?? '',

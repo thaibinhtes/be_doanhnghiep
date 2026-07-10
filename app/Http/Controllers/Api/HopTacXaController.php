@@ -286,7 +286,7 @@ class HopTacXaController extends ApiController
     private function buildFilteredQuery(): Builder
     {
         $user = request()->user();
-        $requestedDonViId = request()->filled('donViId') ? (int) request('donViId') : null;
+        $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
         $query = HopTacXaScopeHelper::query($user)
             ->with(['donVi', 'createdByUser', 'taxManagement']);
 

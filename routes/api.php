@@ -109,6 +109,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/reports/tong-hop/export', [ReportController::class, 'exportTongHop']);
     Route::get('/reports/tien-do-dinh-danh', [ReportController::class, 'tienDoDinhDanh']);
     Route::get('/reports/tien-do-dinh-danh/export', [ReportController::class, 'exportTienDoDinhDanh']);
+    Route::get('/reports/dinh-danh-lich-su', [ReportController::class, 'dinhDanhLichSu']);
 
     Route::get('/dn-trang-thai', [DnTrangThaiController::class, 'index']);
     Route::get('/dn-trang-thai/{dn_trang_thai}', [DnTrangThaiController::class, 'show']);
