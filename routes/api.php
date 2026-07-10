@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\HopTacXaImportFormatController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\MemberCompanyController;
 use App\Http\Controllers\Api\MemberController;
+use App\Http\Controllers\Api\NavMenuController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
@@ -40,6 +41,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+
+    Route::get('/nav-menu', [NavMenuController::class, 'index']);
+    Route::get('/nav-menu/admin', [NavMenuController::class, 'admin']);
+    Route::put('/nav-menu/reorder', [NavMenuController::class, 'reorder']);
 
     Route::middleware('permission:feature.roles.manage')->group(function () {
         Route::get('/permissions', [PermissionController::class, 'index']);
