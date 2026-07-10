@@ -39,7 +39,8 @@ class PermissionRegistry
             ['key' => 'menu.admin.business-types', 'name' => 'Loại hình doanh nghiệp', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/business-types', 'sort_order' => 32],
             ['key' => 'menu.admin.industry-categories', 'name' => 'Danh mục ngành nghề', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/industry-categories', 'sort_order' => 33],
             ['key' => 'menu.admin.org-units', 'name' => 'Quản lý đơn vị', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/org-units', 'sort_order' => 34],
-            ['key' => 'menu.admin.users', 'name' => 'Quản lý người dùng', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/users', 'sort_order' => 35],
+            ['key' => 'menu.admin.tax-units', 'name' => 'Danh mục thuế', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/tax-management?tab=tax-units', 'sort_order' => 35],
+            ['key' => 'menu.admin.users', 'name' => 'Quản lý người dùng', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/users', 'sort_order' => 36],
 
             // Feature — Doanh nghiệp
             ['key' => 'feature.companies.create', 'name' => 'Tạo doanh nghiệp', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 100],

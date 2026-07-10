@@ -34,4 +34,35 @@ class PermissionController extends ApiController
             'grouped' => $grouped,
         ]);
     }
+
+    public function store(Request $request): JsonResponse
+    {
+        if (!RoleHierarchyHelper::isRootUser($request->user())) {
+            return $this->error('Chỉ tài khoản ROOT mới được tạo quyền mới.', 403);
+        }
+
+        $validated = $request->validate([
+            'key' => ['required', 'string', 'max:120', 'regex:/^(menu|feature)\.[a-z0-9._-]+$/', 'unique:permissions,key'],
+            'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', 'in:menu,feature'],
+            'groupName' => ['required', 'string', 'max:120'],
+            'path' => ['nullable', 'string', 'max:255'],
+            'sortOrder' => ['nullable', 'integer', 'min:0', 'max:9999'],
+        ]);
+
+        $permission = Permission::create([
+            'key' => $validated['key'],
+            'name' => $validated['name'],
+            'type' => $validated['type'],
+            'group_name' => $validated['groupName'],
+            'path' => $validated['path'] ?? null,
+            'sort_order' => $validated['sortOrder'] ?? 900,
+        ]);
+
+        return $this->success(
+            new PermissionResource($permission),
+            'Tạo quyền thành công',
+            201,
+        );
+    }
 }

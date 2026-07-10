@@ -43,6 +43,7 @@ Route::middleware('auth:api')->group(function () {
 
     Route::middleware('permission:feature.roles.manage')->group(function () {
         Route::get('/permissions', [PermissionController::class, 'index']);
+        Route::post('/permissions', [PermissionController::class, 'store']);
         Route::get('/roles', [RoleController::class, 'index']);
         Route::get('/roles/{role}', [RoleController::class, 'show']);
         Route::put('/roles/{role}/permissions', [RoleController::class, 'updatePermissions']);
