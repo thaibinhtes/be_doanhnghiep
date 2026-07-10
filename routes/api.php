@@ -45,6 +45,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/nav-menu', [NavMenuController::class, 'index']);
     Route::get('/nav-menu/admin', [NavMenuController::class, 'admin']);
     Route::put('/nav-menu/reorder', [NavMenuController::class, 'reorder']);
+    Route::post('/nav-menu/sync', [NavMenuController::class, 'sync']);
 
     Route::middleware('permission:feature.roles.manage')->group(function () {
         Route::get('/permissions', [PermissionController::class, 'index']);

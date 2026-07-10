@@ -13,6 +13,7 @@ if ! resolve_php_bin; then
     docker compose exec -T app php artisan route:clear
     docker compose exec -T app php artisan config:clear
     docker compose exec -T app php artisan migrate --force
+    docker compose exec -T app php artisan nav-menu:sync
     docker compose exec -T app php artisan db:seed --class=HopTacXaImportConfigSeeder --force
     docker compose exec -T app php artisan route:list --path=hop-tac-xa | head -10
     docker compose restart app queue
@@ -33,6 +34,9 @@ echo "=== [2/5] Clear route/config cache ==="
 
 echo "=== [3/5] Migrate ==="
 "$PHP_BIN" artisan migrate --force
+
+echo "=== [3b] Sync nav menu defaults ==="
+"$PHP_BIN" artisan nav-menu:sync
 
 echo "=== [4/5] Seed HTX import config ==="
 "$PHP_BIN" artisan db:seed --class=HopTacXaImportConfigSeeder --force

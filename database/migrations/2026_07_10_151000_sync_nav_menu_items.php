@@ -12,6 +12,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Keep menu data on rollback.
+        // Non-destructive.
     }
 };

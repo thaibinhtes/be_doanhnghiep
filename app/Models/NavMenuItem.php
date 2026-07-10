@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class NavMenuItem extends Model
 {
     protected $fillable = [
+        'item_key',
         'parent_id',
         'label',
         'path',

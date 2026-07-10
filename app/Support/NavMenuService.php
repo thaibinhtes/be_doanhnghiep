@@ -10,46 +10,121 @@ use Illuminate\Validation\ValidationException;
 
 class NavMenuService
 {
-    public function seedFromRegistry(bool $force = false): void
+    public function count(): int
     {
-        if (!$force && NavMenuItem::query()->exists()) {
-            return;
+        return NavMenuItem::query()->where('is_active', true)->count();
+    }
+
+    /** Đảm bảo menu mặc định luôn có đủ mục (tự heal khi thiếu). */
+    public function ensureSynced(): void
+    {
+        if ($this->count() === 0 || !$this->hasAllRegistryKeys()) {
+            $this->syncFromRegistry();
         }
+    }
 
+    public function hasAllRegistryKeys(): bool
+    {
+        $required = NavMenuRegistry::allItemKeys();
+        $existing = NavMenuItem::query()
+            ->where('is_active', true)
+            ->whereIn('item_key', $required)
+            ->pluck('item_key')
+            ->all();
+
+        return count(array_diff($required, $existing)) === 0;
+    }
+
+    /**
+     * Đồng bộ menu mặc định: thêm mục thiếu, cập nhật metadata hệ thống.
+     * Giữ nguyên label, sort_order, parent_id đã cấu hình.
+     */
+    public function syncFromRegistry(): void
+    {
         DB::transaction(function () {
-            NavMenuItem::query()->delete();
-
-            $sort = 0;
-            foreach (NavMenuRegistry::tree() as $node) {
-                $this->createNode($node, null, $node['sort_order'] ?? $sort);
-                $sort += 10;
-            }
+            $this->syncNodes(NavMenuRegistry::tree(), null);
+            $this->deactivateOrphanItems();
         });
     }
 
-    /** @param array<string, mixed> $node */
-    private function createNode(array $node, ?int $parentId, int $sortOrder): NavMenuItem
+    /** Ẩn mục cũ không còn trong registry (không xóa dữ liệu). */
+    private function deactivateOrphanItems(): void
     {
-        $item = NavMenuItem::create([
-            'parent_id' => $parentId,
-            'label' => $node['label'],
-            'path' => $node['path'] ?? null,
-            'icon' => $node['icon'] ?? null,
-            'permission_key' => $node['permission_key'] ?? null,
-            'permission_keys' => $node['permission_keys'] ?? null,
-            'sort_order' => $sortOrder,
-            'is_dashboard' => (bool) ($node['is_dashboard'] ?? false),
-            'is_root_only' => (bool) ($node['is_root_only'] ?? false),
-            'is_active' => true,
-        ]);
+        $validKeys = NavMenuRegistry::allItemKeys();
 
-        $childSort = 0;
-        foreach ($node['children'] ?? [] as $child) {
-            $this->createNode($child, $item->id, $childSort);
-            $childSort += 10;
+        NavMenuItem::query()
+            ->where(function ($query) use ($validKeys) {
+                $query->whereNull('item_key')
+                    ->orWhereNotIn('item_key', $validKeys);
+            })
+            ->update(['is_active' => false]);
+    }
+
+    /** @deprecated Dùng syncFromRegistry() — không xóa dữ liệu. */
+    public function seedFromRegistry(bool $force = false): void
+    {
+        if ($force && $this->count() === 0) {
+            $this->syncFromRegistry();
+
+            return;
         }
 
-        return $item;
+        $this->ensureSynced();
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $nodes
+     */
+    private function syncNodes(array $nodes, ?int $parentId): void
+    {
+        foreach ($nodes as $index => $node) {
+            $itemKey = (string) $node['item_key'];
+            $item = NavMenuItem::query()->where('item_key', $itemKey)->first();
+
+            if (!$item && !empty($node['path'])) {
+                $pathname = explode('?', (string) $node['path'])[0];
+                $item = NavMenuItem::query()
+                    ->whereNull('item_key')
+                    ->where(function ($query) use ($pathname, $node) {
+                        $query->where('path', $node['path'])
+                            ->orWhere('path', 'like', $pathname.'%');
+                    })
+                    ->first();
+            }
+
+            $sortOrder = (int) ($node['sort_order'] ?? $index * 10);
+
+            if ($item) {
+                $item->update([
+                    'item_key' => $itemKey,
+                    'permission_key' => $node['permission_key'] ?? $item->permission_key,
+                    'permission_keys' => $node['permission_keys'] ?? $item->permission_keys,
+                    'path' => $node['path'] ?? $item->path,
+                    'icon' => $node['icon'] ?? $item->icon,
+                    'is_dashboard' => (bool) ($node['is_dashboard'] ?? $item->is_dashboard),
+                    'is_root_only' => (bool) ($node['is_root_only'] ?? $item->is_root_only),
+                    'is_active' => true,
+                ]);
+            } else {
+                $item = NavMenuItem::create([
+                    'item_key' => $itemKey,
+                    'parent_id' => $parentId,
+                    'label' => $node['label'],
+                    'path' => $node['path'] ?? null,
+                    'icon' => $node['icon'] ?? null,
+                    'permission_key' => $node['permission_key'] ?? null,
+                    'permission_keys' => $node['permission_keys'] ?? null,
+                    'sort_order' => $sortOrder,
+                    'is_dashboard' => (bool) ($node['is_dashboard'] ?? false),
+                    'is_root_only' => (bool) ($node['is_root_only'] ?? false),
+                    'is_active' => true,
+                ]);
+            }
+
+            if (!empty($node['children'])) {
+                $this->syncNodes($node['children'], $item->id);
+            }
+        }
     }
 
     /** @return Collection<int, NavMenuItem> */
@@ -64,6 +139,8 @@ class NavMenuService
     /** @return array<int, array<string, mixed>> */
     public function treeForUser(User $user): array
     {
+        $this->ensureSynced();
+
         $items = $this->allActiveItems();
         $tree = $this->buildTree($items);
         $filtered = $this->filterTree($tree, $user);
@@ -74,7 +151,9 @@ class NavMenuService
     /** @return array<int, array<string, mixed>> */
     public function adminTree(): array
     {
-        $items = NavMenuItem::query()->orderBy('sort_order')->get();
+        $this->ensureSynced();
+
+        $items = NavMenuItem::query()->where('is_active', true)->orderBy('sort_order')->get();
 
         return $this->buildTree($items);
     }
@@ -98,6 +177,7 @@ class NavMenuService
     {
         return [
             'id' => $item->id,
+            'itemKey' => $item->item_key,
             'parentId' => $item->parent_id,
             'label' => $item->label,
             'path' => $item->path,
@@ -179,6 +259,8 @@ class NavMenuService
     }
 
     /**
+     * Chỉ cập nhật tên và vị trí sắp xếp — không xóa mục menu.
+     *
      * @param array<int, array{id: int, parentId?: int|null, sortOrder: int, label?: string}> $items
      */
     public function reorder(User $user, array $items): void
@@ -189,10 +271,19 @@ class NavMenuService
             ]);
         }
 
-        $existing = NavMenuItem::query()->get()->keyBy('id');
+        $this->ensureSynced();
+
+        $existing = NavMenuItem::query()->where('is_active', true)->get()->keyBy('id');
         if ($existing->isEmpty()) {
             throw ValidationException::withMessages([
                 'items' => 'Menu chưa được khởi tạo.',
+            ]);
+        }
+
+        $submittedIds = collect($items)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (count($submittedIds) !== $existing->count()) {
+            throw ValidationException::withMessages([
+                'items' => 'Không được xóa mục menu. Chỉ được sửa tên và thứ tự.',
             ]);
         }
 

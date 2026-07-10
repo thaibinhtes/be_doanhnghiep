@@ -63,4 +63,24 @@ class NavMenuController extends ApiController
             'Cập nhật cấu hình menu thành công',
         );
     }
+
+    public function sync(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        if (!RoleHierarchyHelper::isRootUser($user)) {
+            return $this->error('Chỉ tài khoản ROOT mới được đồng bộ menu.', 403);
+        }
+
+        $this->navMenuService->syncFromRegistry();
+
+        return $this->success(
+            [
+                'total' => $this->navMenuService->count(),
+                'tree' => $this->navMenuService->adminTree(),
+            ],
+            'Đồng bộ menu mặc định thành công',
+        );
+    }
 }

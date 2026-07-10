@@ -26,3 +26,5 @@ php artisan config:clear
 if ! php artisan migrate --force; then
   echo "WARNING: migrate failed — continuing anyway. Fix DB then run: php artisan migrate --force"
 fi
+
+php artisan nav-menu:sync 2>/dev/null || echo "WARNING: nav-menu:sync skipped (run after deploy)"
