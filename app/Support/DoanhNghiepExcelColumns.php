@@ -13,7 +13,7 @@ class DoanhNghiepExcelColumns
         'ngayDangKyThayDoi',
     ];
     /**
-     * Excel column definitions: camelCase key => Vietnamese heading.
+     * Excel export column definitions: camelCase key => Vietnamese heading.
      */
     public const COLUMNS = [
         'tt' => 'TT',
@@ -47,7 +47,44 @@ class DoanhNghiepExcelColumns
     ];
 
     /**
+     * Import mapping fields (không gồm Quận/Huyện + Phường/xã tổng).
+     * Địa bàn dùng 6 field: cũ/mới + địa chỉ cũ/mới.
+     *
+     * @var array<string, string>
+     */
+    public const IMPORT_COLUMNS = [
+        'tt' => 'TT',
+        'maSoDoanhNghiep' => 'Mã số doanh nghiệp',
+        'tenDoanhNghiep' => 'Tên doanh nghiệp',
+        'quanHuyenCu' => 'Quận / Huyện cũ',
+        'quanHuyenMoi' => 'Quận / Huyện mới',
+        'phuongXaCu' => 'Phường / Xã cũ',
+        'phuongXaMoi' => 'Phường / Xã mới',
+        'diaChiCu' => 'Địa chỉ cũ',
+        'diaChiMoi' => 'Địa chỉ mới',
+        'vonDieuLe' => 'Vốn điều lệ',
+        'trangThai' => 'Trạng thái',
+        'dienThoai' => 'Điện thoại',
+        'nguoiDaiDienTen' => 'Người đại diện theo pháp luật',
+        'ngaySinhNguoiDaiDien' => 'Ngày sinh người đại diện',
+        'chuSoHuuTen' => 'Chủ sở hữu',
+        'nganhNgheKDChinh' => 'Ngành nghề KD chính',
+        'nganhNgheKD' => 'Ngành nghề KD',
+        'ngayCap' => 'Ngày cấp',
+        'ngayDangKyThayDoi' => 'Ngày đăng ký thay đổi',
+        'loaiHinhDN' => 'Loại hình DN',
+        'soLuongLaoDong' => 'Số lượng lao động',
+        'dsThanhVienGopVon' => 'DS thành viên góp vốn',
+        'dsCoDong' => 'DS cổ đông',
+        'daCapNhatDinhDanh' => 'Định danh',
+        'loaiDN' => 'Loại DN',
+        'long' => 'Kinh độ (long)',
+        'lat' => 'Vĩ độ (lat)',
+    ];
+
+    /**
      * Map camelCase keys to snake_case database columns.
+     * Address cũ/mới are resolved via DoanhNghiepHanhChinhImportLinker (not mapped here).
      */
     public const CAMEL_TO_SNAKE = [
         'tt' => 'tt',
@@ -91,6 +128,16 @@ class DoanhNghiepExcelColumns
     public static function columnLabels(): array
     {
         return self::COLUMNS;
+    }
+
+    /**
+     * Labels for import / mapping-config UI.
+     *
+     * @return array<string, string>
+     */
+    public static function importColumnLabels(): array
+    {
+        return self::IMPORT_COLUMNS;
     }
 
     /**

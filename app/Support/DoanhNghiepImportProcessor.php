@@ -54,10 +54,16 @@ class DoanhNghiepImportProcessor
             'maSoDoanhNghiep' => ['nullable', 'string', 'max:50'],
             'tt' => ['nullable', 'integer'],
             'diaChi' => ['nullable', 'string'],
+            'diaChiCu' => ['nullable', 'string'],
+            'diaChiMoi' => ['nullable', 'string'],
             'long' => ['nullable', 'numeric', 'between:-180,180'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'quanHuyen' => ['nullable', 'string', 'max:100'],
             'phuongXa' => ['nullable', 'string', 'max:100'],
+            'quanHuyenCu' => ['nullable', 'string', 'max:255'],
+            'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
+            'phuongXaCu' => ['nullable', 'string', 'max:255'],
+            'phuongXaMoi' => ['nullable', 'string', 'max:255'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
             'trangThai' => ['nullable', 'string', 'max:100'],
             'daCapNhatDinhDanh' => ['nullable', 'boolean'],
@@ -102,8 +108,26 @@ class DoanhNghiepImportProcessor
         $membersText = $data['dsThanhVienGopVon'] ?? null;
         unset($data['dsThanhVienGopVon']);
 
+        $data = $this->normalizeLegacyAddressAliases($data);
+
         $snakeData = DoanhNghiepExcelColumns::mapToSnake($data);
         $snakeData = DoanhNghiepNganhNgheHelper::apply($snakeData);
+
+        if ($this->rowHasAddressFields($data)) {
+            // Text địa bàn do linker ghi (match code / ghi chú), không lấy trực tiếp từ map.
+            unset(
+                $snakeData['dia_chi'],
+                $snakeData['quan_huyen'],
+                $snakeData['phuong_xa'],
+            );
+
+            $linked = (new DoanhNghiepHanhChinhImportLinker)->resolve($data);
+            $snakeData = array_merge($snakeData, $linked['snake']);
+
+            if ($linked['notes'] === []) {
+                $snakeData['ghi_chu_hanh_chinh'] = null;
+            }
+        }
 
         try {
             $existing = null;
@@ -266,6 +290,56 @@ class DoanhNghiepImportProcessor
         $meaningful = array_filter($data, fn ($value) => $value !== null && $value !== '');
 
         return empty($meaningful);
+    }
+
+    /**
+     * Map cũ quanHuyen/phuongXa/diaChi → field cũ nếu chưa có.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeLegacyAddressAliases(array $data): array
+    {
+        if ($this->hasValue($data['diaChi'] ?? null) && !$this->hasValue($data['diaChiCu'] ?? null)) {
+            $data['diaChiCu'] = $data['diaChi'];
+        }
+        if ($this->hasValue($data['quanHuyen'] ?? null) && !$this->hasValue($data['quanHuyenCu'] ?? null)) {
+            $data['quanHuyenCu'] = $data['quanHuyen'];
+        }
+        if ($this->hasValue($data['phuongXa'] ?? null) && !$this->hasValue($data['phuongXaCu'] ?? null)) {
+            $data['phuongXaCu'] = $data['phuongXa'];
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function rowHasAddressFields(array $data): bool
+    {
+        foreach ([
+            'quanHuyenCu',
+            'quanHuyenMoi',
+            'phuongXaCu',
+            'phuongXaMoi',
+            'diaChiCu',
+            'diaChiMoi',
+            'quanHuyen',
+            'phuongXa',
+            'diaChi',
+        ] as $key) {
+            if ($this->hasValue($data[$key] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasValue(mixed $value): bool
+    {
+        return $value !== null && $value !== '';
     }
 
     /**

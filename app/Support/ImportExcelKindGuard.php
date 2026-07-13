@@ -68,7 +68,6 @@ class ImportExcelKindGuard
             'tenHtx',
             'chuTichHdqtTen',
             'dsThanhVien',
-            'diaChiMoi',
             'dienTichHa',
             'hoatDong',
         ];

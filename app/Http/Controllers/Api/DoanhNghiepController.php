@@ -104,7 +104,7 @@ class DoanhNghiepController extends ApiController
         return $this->success([
             'startRow' => DoanhNghiepImportColumnMap::DEFAULT_START_ROW,
             'columnMap' => DoanhNghiepImportColumnMap::UNIT_TEMPLATE,
-            'columnLabels' => DoanhNghiepExcelColumns::columnLabels(),
+            'columnLabels' => DoanhNghiepExcelColumns::importColumnLabels(),
             'availableValueExtensions' => DoanhNghiepImportExtensionHelper::availableExtensions(),
             'valueExtensions' => [],
         ]);
