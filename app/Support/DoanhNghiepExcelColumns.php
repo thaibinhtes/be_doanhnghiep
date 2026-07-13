@@ -22,6 +22,10 @@ class DoanhNghiepExcelColumns
         'diaChi' => 'Địa chỉ trụ sở chính',
         'quanHuyen' => 'Quận / Huyện',
         'phuongXa' => 'Phường/xã',
+        'quanHuyenCu' => 'Quận / Huyện cũ',
+        'quanHuyenMoi' => 'Quận / Huyện mới',
+        'phuongXaCu' => 'Phường / Xã cũ',
+        'phuongXaMoi' => 'Phường / Xã mới',
         'vonDieuLe' => 'Vốn điều lệ',
         'trangThai' => 'Trạng thái',
         'dienThoai' => 'Điện thoại',
@@ -103,6 +107,18 @@ class DoanhNghiepExcelColumns
             'diaChi' => $model->dia_chi ?? '',
             'quanHuyen' => $model->quan_huyen ?? '',
             'phuongXa' => $model->phuong_xa ?? '',
+            'quanHuyenCu' => $model->relationLoaded('quanHuyenCu')
+                ? ($model->quanHuyenCu?->full_name ?? '')
+                : '',
+            'quanHuyenMoi' => $model->relationLoaded('tinhThanh')
+                ? ($model->tinhThanh?->full_name ?? '')
+                : '',
+            'phuongXaCu' => $model->relationLoaded('xaPhuongCu')
+                ? ($model->xaPhuongCu?->full_name ?? '')
+                : '',
+            'phuongXaMoi' => $model->relationLoaded('xaPhuong')
+                ? ($model->xaPhuong?->full_name ?? '')
+                : '',
             'vonDieuLe' => $model->von_dieu_le !== null ? (string) $model->von_dieu_le : '',
             'trangThai' => $model->trang_thai ?? '',
             'dienThoai' => $model->dien_thoai !== null ? (string) $model->dien_thoai : '',

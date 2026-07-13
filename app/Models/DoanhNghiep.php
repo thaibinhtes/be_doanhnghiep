@@ -140,8 +140,18 @@ class DoanhNghiep extends Model
         return $this->belongsTo(QuanHuyenCu::class, 'quan_huyen_cu_code', 'code');
     }
 
+    public function xaPhuongCu(): BelongsTo
+    {
+        return $this->belongsTo(XaPhuongCu::class, 'xa_phuong_cu_code', 'code');
+    }
+
     public function tinhThanh(): BelongsTo
     {
         return $this->belongsTo(TinhThanh::class, 'tinh_thanh_code', 'code');
+    }
+
+    public function xaPhuong(): BelongsTo
+    {
+        return $this->belongsTo(XaPhuong::class, 'xa_phuong_code', 'code');
     }
 }

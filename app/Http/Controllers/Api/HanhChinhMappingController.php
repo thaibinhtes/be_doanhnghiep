@@ -305,7 +305,7 @@ class HanhChinhMappingController extends ApiController
     public function syncCompanyField(Request $request): JsonResponse
     {
         $payload = $request->validate([
-            'field' => ['required', 'string', 'in:quanHuyen'],
+            'field' => ['required', 'string', 'in:quanHuyen,phuongXa'],
             'sourceTable' => ['required', 'string', 'in:hanh_chinh_cu,hanh_chinh_moi'],
             'dryRun' => ['nullable', 'boolean'],
         ]);
