@@ -128,6 +128,8 @@ class NavMenuRegistry
                     ['item_key' => 'link.org-units', 'label' => 'Danh mục đơn vị', 'path' => '/admin/org-units', 'permission_key' => 'menu.admin.org-units'],
                     ['item_key' => 'link.users', 'label' => 'Danh mục người dùng', 'path' => '/admin/users', 'permission_key' => 'menu.admin.users'],
                     ['item_key' => 'link.tax-units', 'label' => 'Danh mục thuế', 'path' => '/admin/tax-management?tab=tax-units', 'permission_key' => 'menu.admin.tax-units'],
+                    ['item_key' => 'link.import-mapping-companies', 'label' => 'Cấu hình format ánh xạ import DN', 'path' => '/admin/import-mapping/companies', 'permission_key' => 'menu.admin.import-mapping-companies'],
+                    ['item_key' => 'link.import-mapping-cooperatives', 'label' => 'Cấu hình format ánh xạ import HTX', 'path' => '/admin/import-mapping/cooperatives', 'permission_key' => 'menu.admin.import-mapping-cooperatives'],
                     ['item_key' => 'link.roles', 'label' => 'Phân quyền', 'path' => '/admin/roles', 'permission_key' => 'menu.admin.roles'],
                     [
                         'item_key' => 'link.menu-config',

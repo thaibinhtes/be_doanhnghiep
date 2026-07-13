@@ -23,6 +23,8 @@ class HopTacXaImportConfig extends Model
             'column_map' => 'array',
             'value_extensions' => 'array',
             'is_active' => 'boolean',
+            'start_row' => 'integer',
+            'sort_order' => 'integer',
         ];
     }
 }

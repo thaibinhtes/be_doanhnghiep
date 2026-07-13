@@ -21,6 +21,7 @@ class DoanhNghiepImportConfigResource extends JsonResource
             'startRow' => $this->start_row,
             'columnMap' => $this->column_map ?? [],
             'valueExtensions' => $this->value_extensions ?? [],
+            'isActive' => (bool) $this->is_active,
             'sortOrder' => $this->sort_order,
         ];
     }

@@ -155,6 +155,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/doanh-nghiep/import-column-map', [DoanhNghiepController::class, 'importColumnMap']);
     Route::get('/doanh-nghiep/import-dinh-danh-column-map', [DoanhNghiepController::class, 'importDinhDanhColumnMap']);
     Route::get('/doanh-nghiep/import-configs', [DoanhNghiepImportConfigController::class, 'index']);
+    Route::middleware('permission:feature.import-mapping.manage')->group(function () {
+        Route::get('/doanh-nghiep/import-configs/admin', [DoanhNghiepImportConfigController::class, 'indexAdmin']);
+        Route::post('/doanh-nghiep/import-configs', [DoanhNghiepImportConfigController::class, 'store']);
+        Route::put('/doanh-nghiep/import-configs/{importConfig}', [DoanhNghiepImportConfigController::class, 'update']);
+        Route::delete('/doanh-nghiep/import-configs/{importConfig}', [DoanhNghiepImportConfigController::class, 'destroy']);
+    });
     Route::get('/doanh-nghiep/import-formats', [DoanhNghiepImportFormatController::class, 'index']);
     Route::post('/doanh-nghiep/import-formats', [DoanhNghiepImportFormatController::class, 'store']);
     Route::put('/doanh-nghiep/import-formats/{importFormat}', [DoanhNghiepImportFormatController::class, 'update']);
@@ -177,6 +183,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hop-tac-xa/export-template', [HopTacXaController::class, 'exportTemplate']);
     Route::get('/hop-tac-xa/import-column-map', [HopTacXaController::class, 'importColumnMap']);
     Route::get('/hop-tac-xa/import-configs', [HopTacXaImportConfigController::class, 'index']);
+    Route::middleware('permission:feature.import-mapping.manage')->group(function () {
+        Route::get('/hop-tac-xa/import-configs/admin', [HopTacXaImportConfigController::class, 'indexAdmin']);
+        Route::post('/hop-tac-xa/import-configs', [HopTacXaImportConfigController::class, 'store']);
+        Route::put('/hop-tac-xa/import-configs/{importConfig}', [HopTacXaImportConfigController::class, 'update']);
+        Route::delete('/hop-tac-xa/import-configs/{importConfig}', [HopTacXaImportConfigController::class, 'destroy']);
+    });
     Route::get('/hop-tac-xa/import-formats', [HopTacXaImportFormatController::class, 'index']);
     Route::post('/hop-tac-xa/import-formats', [HopTacXaImportFormatController::class, 'store']);
     Route::put('/hop-tac-xa/import-formats/{importFormat}', [HopTacXaImportFormatController::class, 'update']);

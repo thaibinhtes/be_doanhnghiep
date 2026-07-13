@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Models\DoanhNghiep;
+use App\Models\DoanhNghiepImportConfig;
 use App\Models\DoanhNghiepImportFormat;
 use App\Models\DoanhNghiepImportJob;
 use App\Models\HanhChinhImportFormat;
 use App\Models\HopTacXa;
+use App\Models\HopTacXaImportConfig;
 use App\Models\HopTacXaImportFormat;
 use App\Models\HopTacXaImportJob;
 use App\Models\TaxImportJob;
@@ -59,6 +61,16 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return DoanhNghiepImportFormat::query()->findOrFail($value);
+        });
+
+        Route::bind('importConfig', function (string $value, $route) {
+            $uri = (string) $route->uri();
+
+            if (str_contains($uri, 'hop-tac-xa')) {
+                return HopTacXaImportConfig::query()->findOrFail($value);
+            }
+
+            return DoanhNghiepImportConfig::query()->findOrFail($value);
         });
     }
 }

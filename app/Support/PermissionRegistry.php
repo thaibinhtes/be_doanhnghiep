@@ -41,6 +41,9 @@ class PermissionRegistry
             ['key' => 'menu.admin.org-units', 'name' => 'Quản lý đơn vị', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/org-units', 'sort_order' => 34],
             ['key' => 'menu.admin.tax-units', 'name' => 'Danh mục thuế', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/tax-management?tab=tax-units', 'sort_order' => 35],
             ['key' => 'menu.admin.users', 'name' => 'Quản lý người dùng', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/users', 'sort_order' => 36],
+            ['key' => 'menu.admin.import-mapping-companies', 'name' => 'Cấu hình format ánh xạ import DN', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/import-mapping/companies', 'sort_order' => 37],
+            ['key' => 'menu.admin.import-mapping-cooperatives', 'name' => 'Cấu hình format ánh xạ import HTX', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/import-mapping/cooperatives', 'sort_order' => 38],
+            ['key' => 'feature.import-mapping.manage', 'name' => 'Quản lý format ánh xạ import', 'type' => 'feature', 'group_name' => 'Hệ thống', 'path' => null, 'sort_order' => 129],
 
             // Feature — Doanh nghiệp
             ['key' => 'feature.companies.create', 'name' => 'Tạo doanh nghiệp', 'type' => 'feature', 'group_name' => 'Doanh nghiệp', 'path' => null, 'sort_order' => 100],
