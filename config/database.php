@@ -35,7 +35,25 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            // Relative DB_DATABASE must resolve from app base (not process CWD),
+            // so local `artisan serve` and Docker `/var/www` share the same file.
+            'database' => (static function () {
+                $path = env('DB_DATABASE');
+                if (! is_string($path) || $path === '') {
+                    return database_path('database.sqlite');
+                }
+                if ($path === ':memory:' || str_contains($path, '?mode=memory')) {
+                    return $path;
+                }
+                if (
+                    str_starts_with($path, DIRECTORY_SEPARATOR)
+                    || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1
+                ) {
+                    return $path;
+                }
+
+                return base_path($path);
+            })(),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,
