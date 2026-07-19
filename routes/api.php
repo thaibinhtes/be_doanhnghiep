@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\HanhChinhCuController;
+use App\Http\Controllers\Api\HanhChinhDanhMucController;
 use App\Http\Controllers\Api\HanhChinhImportConfigController;
 use App\Http\Controllers\Api\HanhChinhImportFormatController;
 use App\Http\Controllers\Api\HanhChinhMappingController;
@@ -85,6 +86,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hanh-chinh/cu/import-formats', [HanhChinhImportFormatController::class, 'index']);
     Route::get('/hanh-chinh/moi/don-vi', [HanhChinhMoiController::class, 'indexNewUnits']);
     Route::get('/hanh-chinh/moi/import-column-map', [HanhChinhMoiController::class, 'importColumnMap']);
+    Route::get('/hanh-chinh/danh-muc', [HanhChinhDanhMucController::class, 'index']);
+    Route::post('/hanh-chinh/danh-muc', [HanhChinhDanhMucController::class, 'store']);
     Route::get('/hanh-chinh/mappings', [HanhChinhMappingController::class, 'index']);
     Route::get('/hanh-chinh/mappings/groups', [HanhChinhMappingController::class, 'indexGroups']);
         Route::get('/hanh-chinh/unmapped-doanh-nghiep', [HanhChinhMappingController::class, 'unmappedCompanies']);

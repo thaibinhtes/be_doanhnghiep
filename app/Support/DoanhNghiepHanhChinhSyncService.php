@@ -2,125 +2,154 @@
 
 namespace App\Support;
 
-use App\Models\QuanHuyenCu;
-use App\Models\TinhThanh;
-use App\Models\TinhThanhCu;
+use App\Models\HanhChinhPhuongXa;
+use App\Models\HanhChinhQuanHuyen;
+use App\Models\HanhChinhTinh;
 use App\Models\User;
-use App\Models\XaPhuong;
-use App\Models\XaPhuongCu;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Đồng bộ text hành chính trên doanh nghiệp sang 3 bảng danh mục hợp nhất
+ * (hanh_chinh_tinh / hanh_chinh_quan_huyen / hanh_chinh_phuong_xa, loai cu|moi),
+ * sau đó gán id liên kết từng field. Field đã có id (đã sync) sẽ bỏ qua.
+ */
 class DoanhNghiepHanhChinhSyncService
 {
     /**
-     * Tạo/tìm danh mục từ các field text trên doanh nghiệp, sau đó chỉ ghi code.
-     * Không thay đổi text nguồn hoặc địa chỉ hiển thị.
-     *
+     * @var array<string, array{label: string, text: string, id: string, cap: string, loai: string, parentId: string|null}>
+     */
+    private const FIELD_CONFIG = [
+        'tinhThanhCu' => [
+            'label' => 'Tỉnh / Thành phố cũ',
+            'text' => 'tinh_thanh_cu',
+            'id' => 'tinh_thanh_cu_id',
+            'cap' => 'tinh',
+            'loai' => 'cu',
+            'parentId' => null,
+        ],
+        'tinhThanhMoi' => [
+            'label' => 'Tỉnh / Thành phố mới',
+            'text' => 'tinh_thanh_moi',
+            'id' => 'tinh_thanh_moi_id',
+            'cap' => 'tinh',
+            'loai' => 'moi',
+            'parentId' => null,
+        ],
+        'quanHuyenCu' => [
+            'label' => 'Quận / Huyện cũ',
+            'text' => 'quan_huyen_cu',
+            'id' => 'quan_huyen_cu_id',
+            'cap' => 'quan_huyen',
+            'loai' => 'cu',
+            'parentId' => 'tinh_thanh_cu_id',
+        ],
+        'quanHuyenMoi' => [
+            'label' => 'Quận / Huyện mới',
+            'text' => 'quan_huyen_moi',
+            'id' => 'quan_huyen_moi_id',
+            'cap' => 'quan_huyen',
+            'loai' => 'moi',
+            'parentId' => 'tinh_thanh_moi_id',
+        ],
+        'phuongXaCu' => [
+            'label' => 'Phường / Xã cũ',
+            'text' => 'xa_phuong_cu',
+            'id' => 'xa_phuong_cu_id',
+            'cap' => 'phuong_xa',
+            'loai' => 'cu',
+            'parentId' => 'quan_huyen_cu_id',
+        ],
+        'phuongXaMoi' => [
+            'label' => 'Phường / Xã mới',
+            'text' => 'xa_phuong_moi',
+            'id' => 'xa_phuong_moi_id',
+            'cap' => 'phuong_xa',
+            'loai' => 'moi',
+            'parentId' => 'quan_huyen_moi_id',
+        ],
+    ];
+
+    /** @var array<string, int> key "loai|parentId|ten" → id */
+    private array $tinhMap = [];
+
+    private array $quanHuyenMap = [];
+
+    private array $phuongXaMap = [];
+
+    /** @var array<string, int> fallback theo tên: "loai|ten" → id */
+    private array $quanHuyenNameMap = [];
+
+    private array $phuongXaNameMap = [];
+
+    private int $nextDryRunId = -1;
+
+    /**
      * @return array<string, mixed>
      */
     public function sync(bool $dryRun = false, ?User $user = null): array
     {
-        $catalogs = $this->loadCatalogs();
+        $this->loadCatalogs();
+
         $result = [
             'scanned' => 0,
+            'alreadySynced' => 0,
             'updatedCompanies' => 0,
-            'createdLegacyProvinces' => 0,
-            'createdLegacyDistricts' => 0,
-            'createdLegacyWards' => 0,
-            'createdNewProvinces' => 0,
-            'createdNewWards' => 0,
-            'skipped' => 0,
-            'conflicts' => [],
+            'createdTinh' => 0,
+            'createdQuanHuyen' => 0,
+            'createdPhuongXa' => 0,
         ];
 
         DoanhNghiepScopeHelper::query($user)
             ->where(function ($query) {
                 $query
                     ->whereNotNull('tinh_thanh_cu')
+                    ->orWhereNotNull('tinh_thanh_moi')
                     ->orWhereNotNull('quan_huyen_cu')
                     ->orWhereNotNull('xa_phuong_cu')
                     ->orWhereNotNull('quan_huyen_moi')
                     ->orWhereNotNull('xa_phuong_moi');
             })
             ->orderBy('id')
-            ->chunkById(300, function ($companies) use (&$catalogs, &$result, $dryRun) {
+            ->chunkById(300, function ($companies) use (&$result, $dryRun) {
                 foreach ($companies as $company) {
                     $result['scanned']++;
                     $updates = [];
 
-                    $legacyProvinceCode = $this->resolveLegacyProvince(
-                        (string) ($company->tinh_thanh_cu ?? ''),
-                        $company->tinh_thanh_cu_code,
-                        $catalogs,
-                        $result,
-                        $dryRun,
-                    );
-                    if ($legacyProvinceCode !== null && $legacyProvinceCode !== $company->tinh_thanh_cu_code) {
-                        $updates['tinh_thanh_cu_code'] = $legacyProvinceCode;
+                    $tinhCuId = $company->tinh_thanh_cu_id;
+                    if ($tinhCuId === null && $this->hasText($company->tinh_thanh_cu)) {
+                        $tinhCuId = $this->resolveTinh($company->tinh_thanh_cu, 'cu', $dryRun, $result);
+                        $updates['tinh_thanh_cu_id'] = $tinhCuId;
                     }
 
-                    $legacyDistrictCode = $this->resolveLegacyDistrict(
-                        (string) ($company->quan_huyen_cu ?? ''),
-                        $legacyProvinceCode,
-                        $company->quan_huyen_cu_code,
-                        $catalogs,
-                        $result,
-                        $dryRun,
-                    );
-                    if ($legacyDistrictCode !== null && $legacyDistrictCode !== $company->quan_huyen_cu_code) {
-                        $updates['quan_huyen_cu_code'] = $legacyDistrictCode;
+                    $tinhMoiId = $company->tinh_thanh_moi_id;
+                    if ($tinhMoiId === null && $this->hasText($company->tinh_thanh_moi)) {
+                        $tinhMoiId = $this->resolveTinh($company->tinh_thanh_moi, 'moi', $dryRun, $result);
+                        $updates['tinh_thanh_moi_id'] = $tinhMoiId;
                     }
 
-                    $legacyWardText = HanhChinhCodeGenerator::normalizeName((string) ($company->xa_phuong_cu ?? ''));
-                    if ($legacyWardText !== '') {
-                        if ($legacyDistrictCode === null) {
-                            $this->recordConflict($result, $company->id, 'xa_phuong_cu', $legacyWardText, 'Thiếu cấp huyện cũ.');
-                        } else {
-                            $legacyWardCode = $this->resolveLegacyWard(
-                                $legacyWardText,
-                                $legacyDistrictCode,
-                                $company->xa_phuong_cu_code,
-                                $catalogs,
-                                $result,
-                                $dryRun,
-                            );
-                            if ($legacyWardCode !== $company->xa_phuong_cu_code) {
-                                $updates['xa_phuong_cu_code'] = $legacyWardCode;
-                            }
-                        }
+                    $quanCuId = $company->quan_huyen_cu_id;
+                    if ($quanCuId === null && $this->hasText($company->quan_huyen_cu)) {
+                        $quanCuId = $this->resolveQuanHuyen($company->quan_huyen_cu, 'cu', $tinhCuId, $dryRun, $result);
+                        $updates['quan_huyen_cu_id'] = $quanCuId;
                     }
 
-                    $newProvinceCode = $this->resolveNewProvince(
-                        (string) ($company->quan_huyen_moi ?? ''),
-                        $company->tinh_thanh_code,
-                        $catalogs,
-                        $result,
-                        $dryRun,
-                    );
-                    if ($newProvinceCode !== null && $newProvinceCode !== $company->tinh_thanh_code) {
-                        $updates['tinh_thanh_code'] = $newProvinceCode;
+                    if ($company->xa_phuong_cu_id === null && $this->hasText($company->xa_phuong_cu)) {
+                        $updates['xa_phuong_cu_id'] = $this->resolvePhuongXa($company->xa_phuong_cu, 'cu', $quanCuId, $dryRun, $result);
                     }
 
-                    $newWardText = HanhChinhCodeGenerator::normalizeName((string) ($company->xa_phuong_moi ?? ''));
-                    if ($newWardText !== '') {
-                        if ($newProvinceCode === null) {
-                            $this->recordConflict($result, $company->id, 'xa_phuong_moi', $newWardText, 'Thiếu cấp huyện/tỉnh mới.');
-                        } else {
-                            $newWardCode = $this->resolveNewWard(
-                                $newWardText,
-                                $newProvinceCode,
-                                $company->xa_phuong_code,
-                                $catalogs,
-                                $result,
-                                $dryRun,
-                            );
-                            if ($newWardCode !== $company->xa_phuong_code) {
-                                $updates['xa_phuong_code'] = $newWardCode;
-                            }
-                        }
+                    $quanMoiId = $company->quan_huyen_moi_id;
+                    if ($quanMoiId === null && $this->hasText($company->quan_huyen_moi)) {
+                        $quanMoiId = $this->resolveQuanHuyen($company->quan_huyen_moi, 'moi', $tinhMoiId, $dryRun, $result);
+                        $updates['quan_huyen_moi_id'] = $quanMoiId;
+                    }
+
+                    if ($company->xa_phuong_moi_id === null && $this->hasText($company->xa_phuong_moi)) {
+                        $updates['xa_phuong_moi_id'] = $this->resolvePhuongXa($company->xa_phuong_moi, 'moi', $quanMoiId, $dryRun, $result);
                     }
 
                     if ($updates === []) {
+                        $result['alreadySynced']++;
+
                         continue;
                     }
 
@@ -137,184 +166,220 @@ class DoanhNghiepHanhChinhSyncService
                 }
             });
 
-        $result['skipped'] = count($result['conflicts']);
-
         return $result;
     }
 
     /**
-     * @return array<string, array<string, string>>
+     * @return array<int, array{key: string, label: string, catalog: string, loai: string}>
      */
-    private function loadCatalogs(): array
+    public function fieldSyncOptions(): array
     {
-        return [
-            'legacyProvinces' => TinhThanhCu::query()->get()->mapWithKeys(
-                fn (TinhThanhCu $item) => [$this->key($item->full_name) => $item->code],
-            )->all(),
-            'legacyDistricts' => QuanHuyenCu::query()->get()->mapWithKeys(
-                fn (QuanHuyenCu $item) => [$this->parentKey($item->tinh_thanh_cu_code, $item->full_name) => $item->code],
-            )->all(),
-            'legacyWards' => XaPhuongCu::query()->get()->mapWithKeys(
-                fn (XaPhuongCu $item) => [$this->parentKey($item->quan_huyen_cu_code, $item->full_name) => $item->code],
-            )->all(),
-            'newProvinces' => TinhThanh::query()->get()->mapWithKeys(
-                fn (TinhThanh $item) => [$this->key($item->full_name) => $item->code],
-            )->all(),
-            'newWards' => XaPhuong::query()->get()->mapWithKeys(
-                fn (XaPhuong $item) => [$this->parentKey($item->tinh_thanh_code, $item->full_name) => $item->code],
-            )->all(),
+        $catalogLabels = [
+            'tinh' => 'Bảng tỉnh',
+            'quan_huyen' => 'Bảng quận huyện',
+            'phuong_xa' => 'Bảng phường xã',
         ];
+
+        return collect(self::FIELD_CONFIG)
+            ->map(fn (array $config, string $key) => [
+                'key' => $key,
+                'label' => $config['label'],
+                'catalog' => $catalogLabels[$config['cap']],
+                'loai' => $config['loai'],
+            ])
+            ->values()
+            ->all();
     }
 
-    private function resolveLegacyProvince(
-        string $text,
-        ?string $existingCode,
-        array &$catalogs,
-        array &$result,
-        bool $dryRun,
-    ): ?string {
-        $name = HanhChinhCodeGenerator::normalizeName($text);
-        if ($name === '') {
-            return $existingCode;
-        }
-
-        $key = $this->key($name);
-        if (isset($catalogs['legacyProvinces'][$key])) {
-            return $catalogs['legacyProvinces'][$key];
-        }
-
-        $code = HanhChinhCodeGenerator::provinceCode($name);
-        if (! $dryRun) {
-            TinhThanhCu::query()->firstOrCreate(['code' => $code], ['full_name' => $name]);
-        }
-        $catalogs['legacyProvinces'][$key] = $code;
-        $result['createdLegacyProvinces']++;
-
-        return $code;
-    }
-
-    private function resolveLegacyDistrict(
-        string $text,
-        ?string $provinceCode,
-        ?string $existingCode,
-        array &$catalogs,
-        array &$result,
-        bool $dryRun,
-    ): ?string {
-        $name = HanhChinhCodeGenerator::normalizeName($text);
-        if ($name === '') {
-            return $existingCode;
-        }
-
-        $key = $this->parentKey($provinceCode, $name);
-        if (isset($catalogs['legacyDistricts'][$key])) {
-            return $catalogs['legacyDistricts'][$key];
-        }
-
-        $code = HanhChinhCodeGenerator::districtCode((string) $provinceCode, $name);
-        if (! $dryRun) {
-            QuanHuyenCu::query()->firstOrCreate(
-                ['code' => $code],
-                ['full_name' => $name, 'tinh_thanh_cu_code' => $provinceCode],
-            );
-        }
-        $catalogs['legacyDistricts'][$key] = $code;
-        $result['createdLegacyDistricts']++;
-
-        return $code;
-    }
-
-    private function resolveLegacyWard(
-        string $name,
-        string $districtCode,
-        ?string $existingCode,
-        array &$catalogs,
-        array &$result,
-        bool $dryRun,
-    ): string {
-        $key = $this->parentKey($districtCode, $name);
-        if (isset($catalogs['legacyWards'][$key])) {
-            return $catalogs['legacyWards'][$key];
-        }
-
-        $code = HanhChinhCodeGenerator::wardCode($districtCode, $name);
-        if (! $dryRun) {
-            XaPhuongCu::query()->firstOrCreate(
-                ['code' => $code],
-                ['full_name' => $name, 'quan_huyen_cu_code' => $districtCode],
-            );
-        }
-        $catalogs['legacyWards'][$key] = $code;
-        $result['createdLegacyWards']++;
-
-        return $code;
-    }
-
-    private function resolveNewProvince(
-        string $text,
-        ?string $existingCode,
-        array &$catalogs,
-        array &$result,
-        bool $dryRun,
-    ): ?string {
-        $name = HanhChinhCodeGenerator::normalizeName($text);
-        if ($name === '') {
-            return $existingCode;
-        }
-
-        $key = $this->key($name);
-        if (isset($catalogs['newProvinces'][$key])) {
-            return $catalogs['newProvinces'][$key];
-        }
-
-        $code = HanhChinhCodeGenerator::provinceCode($name);
-        if (! $dryRun) {
-            TinhThanh::query()->firstOrCreate(['code' => $code], ['full_name' => $name]);
-        }
-        $catalogs['newProvinces'][$key] = $code;
-        $result['createdNewProvinces']++;
-
-        return $code;
-    }
-
-    private function resolveNewWard(
-        string $name,
-        string $provinceCode,
-        ?string $existingCode,
-        array &$catalogs,
-        array &$result,
-        bool $dryRun,
-    ): string {
-        $key = $this->parentKey($provinceCode, $name);
-        if (isset($catalogs['newWards'][$key])) {
-            return $catalogs['newWards'][$key];
-        }
-
-        $code = HanhChinhCodeGenerator::wardCode($provinceCode, $name);
-        if (! $dryRun) {
-            XaPhuong::query()->firstOrCreate(
-                ['code' => $code],
-                ['full_name' => $name, 'tinh_thanh_code' => $provinceCode],
-            );
-        }
-        $catalogs['newWards'][$key] = $code;
-        $result['createdNewWards']++;
-
-        return $code;
-    }
-
-    private function key(string $name): string
+    /**
+     * Đồng bộ riêng một field text vào đúng bảng danh mục và loại cũ/mới.
+     *
+     * @return array<string, mixed>
+     */
+    public function syncField(string $field, bool $dryRun = false, ?User $user = null): array
     {
-        return mb_strtolower(HanhChinhCodeGenerator::normalizeName($name));
+        $config = self::FIELD_CONFIG[$field] ?? null;
+        if ($config === null) {
+            throw new \InvalidArgumentException('Field hành chính không được hỗ trợ đồng bộ.');
+        }
+
+        $this->loadCatalogs();
+        $result = [
+            'field' => $field,
+            'label' => $config['label'],
+            'catalog' => $config['cap'],
+            'loai' => $config['loai'],
+            'scanned' => 0,
+            'matched' => 0,
+            'created' => 0,
+            'updated' => 0,
+            'skipped' => 0,
+            'alreadyLinked' => 0,
+            'unmapped' => [],
+        ];
+
+        DoanhNghiepScopeHelper::query($user)
+            ->orderBy('id')
+            ->chunkById(300, function ($companies) use ($config, $dryRun, &$result) {
+                foreach ($companies as $company) {
+                    $result['scanned']++;
+
+                    if ($company->{$config['id']} !== null) {
+                        $result['alreadyLinked']++;
+
+                        continue;
+                    }
+
+                    $text = HanhChinhCodeGenerator::normalizeName((string) ($company->{$config['text']} ?? ''));
+                    if ($text === '') {
+                        $result['skipped']++;
+
+                        continue;
+                    }
+
+                    $beforeCreated = $result['created'];
+                    $resolveResult = ['createdTinh' => 0, 'createdQuanHuyen' => 0, 'createdPhuongXa' => 0];
+                    $parentId = $config['parentId'] !== null ? $company->{$config['parentId']} : null;
+
+                    $id = match ($config['cap']) {
+                        'tinh' => $this->resolveTinh($text, $config['loai'], $dryRun, $resolveResult),
+                        'quan_huyen' => $this->resolveQuanHuyen(
+                            $text,
+                            $config['loai'],
+                            $parentId,
+                            $dryRun,
+                            $resolveResult,
+                        ),
+                        default => $this->resolvePhuongXa(
+                            $text,
+                            $config['loai'],
+                            $parentId,
+                            $dryRun,
+                            $resolveResult,
+                        ),
+                    };
+
+                    $created = array_sum($resolveResult);
+                    $result['created'] += $created;
+                    if ($result['created'] === $beforeCreated) {
+                        $result['matched']++;
+                    }
+                    $result['updated']++;
+
+                    if (! $dryRun) {
+                        DB::table('doanh_nghieps')
+                            ->where('id', $company->id)
+                            ->update([
+                                $config['id'] => $id,
+                                'hanh_chinh_synced_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                    }
+                }
+            });
+
+        return $result;
     }
 
-    private function parentKey(?string $parentCode, string $name): string
+    private function loadCatalogs(): void
     {
-        return mb_strtolower((string) $parentCode).'|'.$this->key($name);
+        foreach (HanhChinhTinh::query()->orderBy('id')->get(['id', 'ten', 'loai']) as $item) {
+            $this->tinhMap[$this->key($item->loai, null, $item->ten)] ??= $item->id;
+        }
+
+        foreach (HanhChinhQuanHuyen::query()->orderBy('id')->get(['id', 'ten', 'loai', 'tinh_id']) as $item) {
+            $this->quanHuyenMap[$this->key($item->loai, $item->tinh_id, $item->ten)] ??= $item->id;
+            $this->quanHuyenNameMap[$this->key($item->loai, null, $item->ten)] ??= $item->id;
+        }
+
+        foreach (HanhChinhPhuongXa::query()->orderBy('id')->get(['id', 'ten', 'loai', 'quan_huyen_id']) as $item) {
+            $this->phuongXaMap[$this->key($item->loai, $item->quan_huyen_id, $item->ten)] ??= $item->id;
+            $this->phuongXaNameMap[$this->key($item->loai, null, $item->ten)] ??= $item->id;
+        }
     }
 
-    private function recordConflict(array &$result, int $companyId, string $field, string $value, string $reason): void
+    private function resolveTinh(string $text, string $loai, bool $dryRun, array &$result): int
     {
-        $result['conflicts'][] = compact('companyId', 'field', 'value', 'reason');
+        $name = HanhChinhCodeGenerator::normalizeName($text);
+        $key = $this->key($loai, null, $name);
+
+        if (isset($this->tinhMap[$key])) {
+            return $this->tinhMap[$key];
+        }
+
+        $id = $dryRun
+            ? $this->nextDryRunId--
+            : HanhChinhTinh::query()->create(['ten' => $name, 'loai' => $loai])->id;
+
+        $this->tinhMap[$key] = $id;
+        $result['createdTinh']++;
+
+        return $id;
+    }
+
+    private function resolveQuanHuyen(string $text, string $loai, ?int $tinhId, bool $dryRun, array &$result): int
+    {
+        $name = HanhChinhCodeGenerator::normalizeName($text);
+        $parentKey = $this->key($loai, $tinhId, $name);
+        $nameKey = $this->key($loai, null, $name);
+
+        if (isset($this->quanHuyenMap[$parentKey])) {
+            return $this->quanHuyenMap[$parentKey];
+        }
+        if (isset($this->quanHuyenNameMap[$nameKey])) {
+            return $this->quanHuyenNameMap[$nameKey];
+        }
+
+        $id = $dryRun
+            ? $this->nextDryRunId--
+            : HanhChinhQuanHuyen::query()->create([
+                'ten' => $name,
+                'loai' => $loai,
+                'tinh_id' => $tinhId !== null && $tinhId > 0 ? $tinhId : null,
+            ])->id;
+
+        $this->quanHuyenMap[$parentKey] = $id;
+        $this->quanHuyenNameMap[$nameKey] = $id;
+        $result['createdQuanHuyen']++;
+
+        return $id;
+    }
+
+    private function resolvePhuongXa(string $text, string $loai, ?int $quanHuyenId, bool $dryRun, array &$result): int
+    {
+        $name = HanhChinhCodeGenerator::normalizeName($text);
+        $parentKey = $this->key($loai, $quanHuyenId, $name);
+        $nameKey = $this->key($loai, null, $name);
+
+        if (isset($this->phuongXaMap[$parentKey])) {
+            return $this->phuongXaMap[$parentKey];
+        }
+        if (isset($this->phuongXaNameMap[$nameKey])) {
+            return $this->phuongXaNameMap[$nameKey];
+        }
+
+        $id = $dryRun
+            ? $this->nextDryRunId--
+            : HanhChinhPhuongXa::query()->create([
+                'ten' => $name,
+                'loai' => $loai,
+                'quan_huyen_id' => $quanHuyenId !== null && $quanHuyenId > 0 ? $quanHuyenId : null,
+            ])->id;
+
+        $this->phuongXaMap[$parentKey] = $id;
+        $this->phuongXaNameMap[$nameKey] = $id;
+        $result['createdPhuongXa']++;
+
+        return $id;
+    }
+
+    private function hasText(?string $value): bool
+    {
+        return $value !== null && trim($value) !== '';
+    }
+
+    private function key(string $loai, ?int $parentId, string $name): string
+    {
+        return $loai.'|'.($parentId ?? '').'|'.mb_strtolower(HanhChinhCodeGenerator::normalizeName($name));
     }
 }

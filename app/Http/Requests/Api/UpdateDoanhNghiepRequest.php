@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +19,7 @@ class UpdateDoanhNghiepRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -36,6 +37,7 @@ class UpdateDoanhNghiepRequest extends FormRequest
             'quanHuyen' => ['nullable', 'string', 'max:255'],
             'phuongXa' => ['nullable', 'string', 'max:255'],
             'tinhThanhCu' => ['nullable', 'string', 'max:255'],
+            'tinhThanhMoi' => ['nullable', 'string', 'max:255'],
             'quanHuyenCu' => ['nullable', 'string', 'max:255'],
             'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
             'phuongXaCu' => ['nullable', 'string', 'max:255'],

@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\HopTacXa;
+
 class HopTacXaExcelColumns
 {
     /**
@@ -23,6 +25,7 @@ class HopTacXaExcelColumns
         'quanHuyenCu' => 'Cấp huyện cũ',
         'quanHuyenMoi' => 'Cấp huyện mới',
         'tinhThanhCu' => 'Cấp tỉnh cũ',
+        'tinhThanhMoi' => 'Cấp tỉnh mới',
         'dienTichHa' => 'Diện tích (ha)',
         'vonDieuLe' => 'Vốn điều lệ',
         'soThanhVien' => 'Thành viên',
@@ -49,6 +52,7 @@ class HopTacXaExcelColumns
         'quanHuyenCu' => 'quan_huyen_cu',
         'quanHuyenMoi' => 'quan_huyen_moi',
         'tinhThanhCu' => 'tinh_thanh_cu',
+        'tinhThanhMoi' => 'tinh_thanh_moi',
         'dienTichHa' => 'dien_tich_ha',
         'vonDieuLe' => 'von_dieu_le',
         'soThanhVien' => 'so_thanh_vien',
@@ -86,7 +90,7 @@ class HopTacXaExcelColumns
         $result = [];
 
         foreach ($data as $key => $value) {
-            if (!isset(self::CAMEL_TO_SNAKE[$key])) {
+            if (! isset(self::CAMEL_TO_SNAKE[$key])) {
                 continue;
             }
 
@@ -121,7 +125,7 @@ class HopTacXaExcelColumns
     /**
      * @return list<mixed>
      */
-    public static function exportValues(\App\Models\HopTacXa $model, int $sequence): array
+    public static function exportValues(HopTacXa $model, int $sequence): array
     {
         $row = [
             'tt' => $sequence,
@@ -139,6 +143,7 @@ class HopTacXaExcelColumns
             'quanHuyenCu' => $model->quan_huyen_cu ?? '',
             'quanHuyenMoi' => $model->quan_huyen_moi ?? '',
             'tinhThanhCu' => $model->tinh_thanh_cu ?? '',
+            'tinhThanhMoi' => $model->tinh_thanh_moi ?? '',
             'dienTichHa' => $model->dien_tich_ha ?? '',
             'vonDieuLe' => $model->von_dieu_le !== null ? (string) $model->von_dieu_le : '',
             'soThanhVien' => $model->so_thanh_vien ?? '',
@@ -170,7 +175,7 @@ class HopTacXaExcelColumns
 
         while ($columnIndex > 0) {
             $columnIndex--;
-            $letter = chr(65 + ($columnIndex % 26)) . $letter;
+            $letter = chr(65 + ($columnIndex % 26)).$letter;
             $columnIndex = intdiv($columnIndex, 26);
         }
 

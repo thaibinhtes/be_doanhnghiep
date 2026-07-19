@@ -34,6 +34,11 @@ class DoanhNghiepHanhChinhTextMapperTest extends TestCase
         $this->assertNull($result['xa_phuong_cu_code']);
         $this->assertNull($result['tinh_thanh_code']);
         $this->assertNull($result['xa_phuong_code']);
+        $this->assertNull($result['tinh_thanh_cu_id']);
+        $this->assertNull($result['quan_huyen_cu_id']);
+        $this->assertNull($result['xa_phuong_cu_id']);
+        $this->assertNull($result['quan_huyen_moi_id']);
+        $this->assertNull($result['xa_phuong_moi_id']);
     }
 
     public function test_prefers_cu_for_legacy_display_when_moi_empty(): void

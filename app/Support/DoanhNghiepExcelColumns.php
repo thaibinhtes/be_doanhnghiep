@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\DoanhNghiep;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class DoanhNghiepExcelColumns
@@ -12,6 +13,7 @@ class DoanhNghiepExcelColumns
         'ngayCap',
         'ngayDangKyThayDoi',
     ];
+
     /**
      * Excel export column definitions: camelCase key => Vietnamese heading.
      */
@@ -23,6 +25,7 @@ class DoanhNghiepExcelColumns
         'quanHuyen' => 'Quận / Huyện',
         'phuongXa' => 'Phường/xã',
         'tinhThanhCu' => 'Cấp tỉnh (cũ)',
+        'tinhThanhMoi' => 'Cấp tỉnh (mới)',
         'quanHuyenCu' => 'Quận / Huyện cũ',
         'quanHuyenMoi' => 'Quận / Huyện mới',
         'phuongXaCu' => 'Phường / Xã cũ',
@@ -58,6 +61,7 @@ class DoanhNghiepExcelColumns
         'maSoDoanhNghiep' => 'Mã số doanh nghiệp',
         'tenDoanhNghiep' => 'Tên doanh nghiệp',
         'tinhThanhCu' => 'Cấp tỉnh (cũ)',
+        'tinhThanhMoi' => 'Cấp tỉnh (mới)',
         'quanHuyenCu' => 'Quận / Huyện cũ',
         'quanHuyenMoi' => 'Quận / Huyện mới',
         'phuongXaCu' => 'Phường / Xã cũ',
@@ -100,6 +104,7 @@ class DoanhNghiepExcelColumns
         'quanHuyen' => 'quan_huyen',
         'phuongXa' => 'phuong_xa',
         'tinhThanhCu' => 'tinh_thanh_cu',
+        'tinhThanhMoi' => 'tinh_thanh_moi',
         'quanHuyenCu' => 'quan_huyen_cu',
         'quanHuyenMoi' => 'quan_huyen_moi',
         'phuongXaCu' => 'xa_phuong_cu',
@@ -154,7 +159,7 @@ class DoanhNghiepExcelColumns
      *
      * @return list<mixed>
      */
-    public static function exportValues(\App\Models\DoanhNghiep $model, int $sequence): array
+    public static function exportValues(DoanhNghiep $model, int $sequence): array
     {
         $row = [
             'tt' => $sequence,
@@ -165,6 +170,7 @@ class DoanhNghiepExcelColumns
             'phuongXa' => $model->phuong_xa ?? '',
             'tinhThanhCu' => $model->tinh_thanh_cu
                 ?? ($model->relationLoaded('tinhThanhCu') ? ($model->tinhThanhCu?->full_name ?? '') : ''),
+            'tinhThanhMoi' => $model->tinh_thanh_moi ?? '',
             'quanHuyenCu' => $model->quan_huyen_cu
                 ?? ($model->relationLoaded('quanHuyenCu') ? ($model->quanHuyenCu?->full_name ?? '') : ''),
             'quanHuyenMoi' => $model->quan_huyen_moi
@@ -219,7 +225,7 @@ class DoanhNghiepExcelColumns
         $letter = '';
         while ($columnIndex > 0) {
             $columnIndex--;
-            $letter = chr(65 + ($columnIndex % 26)) . $letter;
+            $letter = chr(65 + ($columnIndex % 26)).$letter;
             $columnIndex = intdiv($columnIndex, 26);
         }
 
@@ -262,7 +268,7 @@ class DoanhNghiepExcelColumns
         $result = [];
 
         foreach ($data as $key => $value) {
-            if (!isset(self::CAMEL_TO_SNAKE[$key])) {
+            if (! isset(self::CAMEL_TO_SNAKE[$key])) {
                 continue;
             }
 
@@ -281,7 +287,7 @@ class DoanhNghiepExcelColumns
      */
     public static function formatMembersForExport($memberCompanies): string
     {
-        if (!$memberCompanies || $memberCompanies->isEmpty()) {
+        if (! $memberCompanies || $memberCompanies->isEmpty()) {
             return '';
         }
 

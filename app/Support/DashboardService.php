@@ -3,8 +3,9 @@
 namespace App\Support;
 
 use App\Models\User;
-use Illuminate\Database\Query\Expression;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
@@ -95,29 +96,83 @@ class DashboardService
     }
 
     /**
+     * Group theo danh mục hành chính hợp nhất (hanh_chinh_*), ưu tiên cột id đã sync.
+     *
      * @return array<string, array<int, array<string, mixed>>>
      */
     private function buildCompanyAreaBreakdowns(?User $user): array
     {
         $dimensions = [
-            'quanHuyenMoi' => ['tinh_thanh', 'tinh_thanh_code', 'quan_huyen'],
-            'quanHuyenCu' => ['quan_huyen_cu', 'quan_huyen_cu_code', 'quan_huyen'],
-            'phuongXaMoi' => ['xa_phuong', 'xa_phuong_code', 'phuong_xa'],
-            'phuongXaCu' => ['xa_phuong_cu', 'xa_phuong_cu_code', 'phuong_xa'],
+            'quanHuyenMoi' => [
+                'table' => 'hanh_chinh_quan_huyen',
+                'loai' => 'moi',
+                'idColumn' => 'quan_huyen_moi_id',
+                'textColumn' => 'quan_huyen_moi',
+                'fallbackTextColumn' => 'quan_huyen',
+            ],
+            'quanHuyenCu' => [
+                'table' => 'hanh_chinh_quan_huyen',
+                'loai' => 'cu',
+                'idColumn' => 'quan_huyen_cu_id',
+                'textColumn' => 'quan_huyen_cu',
+                'fallbackTextColumn' => 'quan_huyen',
+            ],
+            'phuongXaMoi' => [
+                'table' => 'hanh_chinh_phuong_xa',
+                'loai' => 'moi',
+                'idColumn' => 'xa_phuong_moi_id',
+                'textColumn' => 'xa_phuong_moi',
+                'fallbackTextColumn' => 'phuong_xa',
+            ],
+            'phuongXaCu' => [
+                'table' => 'hanh_chinh_phuong_xa',
+                'loai' => 'cu',
+                'idColumn' => 'xa_phuong_cu_id',
+                'textColumn' => 'xa_phuong_cu',
+                'fallbackTextColumn' => 'phuong_xa',
+            ],
         ];
 
         $result = [];
 
-        foreach ($dimensions as $key => [$areaTable, $foreignKey, $textColumn]) {
+        foreach ($dimensions as $key => $dimension) {
+            if (! Schema::hasTable($dimension['table'])) {
+                $result[$key] = [];
+
+                continue;
+            }
+
+            $idColumn = Schema::hasColumn('doanh_nghieps', $dimension['idColumn'])
+                ? $dimension['idColumn']
+                : null;
+            $textColumn = Schema::hasColumn('doanh_nghieps', $dimension['textColumn'])
+                ? $dimension['textColumn']
+                : $dimension['fallbackTextColumn'];
+
             $rows = DoanhNghiepScopeHelper::query($user)
-                ->leftJoin("{$areaTable} as admin_area", function ($join) use ($foreignKey, $textColumn) {
-                    $join->whereRaw(
-                        '(admin_area.code = doanh_nghieps.' . $foreignKey . '
-                            OR (
-                                NULLIF(doanh_nghieps.' . $foreignKey . ", '') IS NULL
-                                AND LOWER(TRIM(admin_area.full_name)) = LOWER(TRIM(doanh_nghieps." . $textColumn . '))
-                            ))',
-                    );
+                ->leftJoin("{$dimension['table']} as admin_area", function ($join) use ($dimension, $idColumn, $textColumn) {
+                    $loai = $dimension['loai'];
+                    if ($idColumn !== null) {
+                        $join->whereRaw(
+                            "admin_area.loai = ?
+                            AND (
+                                admin_area.id = doanh_nghieps.{$idColumn}
+                                OR (
+                                    doanh_nghieps.{$idColumn} IS NULL
+                                    AND NULLIF(TRIM(COALESCE(doanh_nghieps.{$textColumn}, '')), '') IS NOT NULL
+                                    AND LOWER(TRIM(admin_area.ten)) = LOWER(TRIM(doanh_nghieps.{$textColumn}))
+                                )
+                            )",
+                            [$loai],
+                        );
+                    } else {
+                        $join->whereRaw(
+                            "admin_area.loai = ?
+                            AND NULLIF(TRIM(COALESCE(doanh_nghieps.{$textColumn}, '')), '') IS NOT NULL
+                            AND LOWER(TRIM(admin_area.ten)) = LOWER(TRIM(doanh_nghieps.{$textColumn}))",
+                            [$loai],
+                        );
+                    }
                 })
                 ->leftJoin(
                     'company_tax_managements as company_tax',
@@ -125,7 +180,7 @@ class DashboardService
                     '=',
                     'doanh_nghieps.id',
                 )
-                ->selectRaw('admin_area.code as area_code, admin_area.full_name as area_name')
+                ->selectRaw('admin_area.id as area_code, admin_area.ten as area_name')
                 ->selectRaw('COUNT(DISTINCT doanh_nghieps.id) as total')
                 ->selectRaw(
                     'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = true THEN doanh_nghieps.id END) as da_dinh_danh',
@@ -136,120 +191,136 @@ class DashboardService
                 ->selectRaw(
                     'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NULL THEN doanh_nghieps.id END) as chua_dinh_danh',
                 )
-                ->groupBy('admin_area.code', 'admin_area.full_name')
+                ->groupBy('admin_area.id', 'admin_area.ten')
                 ->get();
 
-            $result[$key] = $this->formatAreaStats($rows, $areaTable);
+            $result[$key] = $this->formatUnifiedAreaStats(
+                $rows,
+                $dimension['table'],
+                $dimension['loai'],
+            );
         }
 
         return $result;
     }
 
     /**
-     * HTX hiện lưu tên phường/xã dạng text. Ghép tên này với danh mục hành chính
-     * đã đồng bộ từ API để xác định đơn vị cũ/mới và cấp cha tương ứng.
+     * HTX: khớp text với danh mục hợp nhất, lấy cấp cha qua quan_huyen_id khi cần.
      *
      * @return array<string, array<int, array<string, mixed>>>
      */
     private function buildCooperativeAreaBreakdowns(?User $user): array
     {
-        $result = [];
+        $result = [
+            'phuongXaCu' => [],
+            'quanHuyenCu' => [],
+            'phuongXaMoi' => [],
+            'quanHuyenMoi' => [],
+        ];
 
-        $result['phuongXaCu'] = $this->formatAreaStats(
+        if (! Schema::hasTable('hanh_chinh_phuong_xa')) {
+            return $result;
+        }
+
+        $wardTextColumn = Schema::hasColumn('hop_tac_xas', 'phuong_xa') ? 'phuong_xa' : null;
+        if ($wardTextColumn === null) {
+            return $result;
+        }
+
+        $result['phuongXaCu'] = $this->formatUnifiedAreaStats(
             $this->selectCooperativeAreaCounts(
                 $this->buildCooperativeAreaQuery($user)
-                    ->leftJoin('xa_phuong_cu as admin_area', function ($join) {
-                        $join->on(
-                            $this->normalizedSql('admin_area.full_name'),
-                            '=',
-                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
-                        );
+                    ->leftJoin('hanh_chinh_phuong_xa as admin_area', function ($join) use ($wardTextColumn) {
+                        $join->where('admin_area.loai', '=', 'cu')
+                            ->whereRaw(
+                                'LOWER(TRIM(admin_area.ten)) = LOWER(TRIM(hop_tac_xas.'.$wardTextColumn.'))',
+                            );
                     }),
                 'admin_area',
             )->get(),
-            'xa_phuong_cu',
+            'hanh_chinh_phuong_xa',
+            'cu',
         );
 
-        $result['quanHuyenCu'] = $this->formatAreaStats(
+        $result['phuongXaMoi'] = $this->formatUnifiedAreaStats(
             $this->selectCooperativeAreaCounts(
                 $this->buildCooperativeAreaQuery($user)
-                    ->leftJoin('xa_phuong_cu as matched_ward', function ($join) {
-                        $join->on(
-                            $this->normalizedSql('matched_ward.full_name'),
-                            '=',
-                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
-                        );
-                    })
-                    ->leftJoin(
-                        'quan_huyen_cu as admin_area',
-                        'admin_area.code',
-                        '=',
-                        'matched_ward.quan_huyen_cu_code',
-                    ),
-                'admin_area',
-            )->get(),
-            'quan_huyen_cu',
-        );
-
-        $result['phuongXaMoi'] = $this->formatAreaStats(
-            $this->selectCooperativeAreaCounts(
-                $this->buildCooperativeAreaQuery($user)
-                    ->leftJoin('xa_phuong as admin_area', function ($join) {
-                        $join->on(
-                            $this->normalizedSql('admin_area.full_name'),
-                            '=',
-                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
-                        );
+                    ->leftJoin('hanh_chinh_phuong_xa as admin_area', function ($join) use ($wardTextColumn) {
+                        $join->where('admin_area.loai', '=', 'moi')
+                            ->whereRaw(
+                                'LOWER(TRIM(admin_area.ten)) = LOWER(TRIM(hop_tac_xas.'.$wardTextColumn.'))',
+                            );
                     }),
                 'admin_area',
             )->get(),
-            'xa_phuong',
+            'hanh_chinh_phuong_xa',
+            'moi',
         );
 
-        $result['quanHuyenMoi'] = $this->formatAreaStats(
-            $this->selectCooperativeAreaCounts(
-                $this->buildCooperativeAreaQuery($user)
-                    ->leftJoin('xa_phuong as matched_ward', function ($join) {
-                        $join->on(
-                            $this->normalizedSql('matched_ward.full_name'),
-                            '=',
-                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
-                        );
-                    })
-                    ->leftJoin(
-                        'tinh_thanh as admin_area',
-                        'admin_area.code',
-                        '=',
-                        'matched_ward.tinh_thanh_code',
-                    ),
-                'admin_area',
-            )->get(),
-            'tinh_thanh',
-        );
+        if (Schema::hasTable('hanh_chinh_quan_huyen')) {
+            $result['quanHuyenCu'] = $this->formatUnifiedAreaStats(
+                $this->selectCooperativeAreaCounts(
+                    $this->buildCooperativeAreaQuery($user)
+                        ->leftJoin('hanh_chinh_phuong_xa as matched_ward', function ($join) use ($wardTextColumn) {
+                            $join->where('matched_ward.loai', '=', 'cu')
+                                ->whereRaw(
+                                    'LOWER(TRIM(matched_ward.ten)) = LOWER(TRIM(hop_tac_xas.'.$wardTextColumn.'))',
+                                );
+                        })
+                        ->leftJoin('hanh_chinh_quan_huyen as admin_area', function ($join) {
+                            $join->on('admin_area.id', '=', 'matched_ward.quan_huyen_id')
+                                ->where('admin_area.loai', '=', 'cu');
+                        }),
+                    'admin_area',
+                )->get(),
+                'hanh_chinh_quan_huyen',
+                'cu',
+            );
+
+            $result['quanHuyenMoi'] = $this->formatUnifiedAreaStats(
+                $this->selectCooperativeAreaCounts(
+                    $this->buildCooperativeAreaQuery($user)
+                        ->leftJoin('hanh_chinh_phuong_xa as matched_ward', function ($join) use ($wardTextColumn) {
+                            $join->where('matched_ward.loai', '=', 'moi')
+                                ->whereRaw(
+                                    'LOWER(TRIM(matched_ward.ten)) = LOWER(TRIM(hop_tac_xas.'.$wardTextColumn.'))',
+                                );
+                        })
+                        ->leftJoin('hanh_chinh_quan_huyen as admin_area', function ($join) {
+                            $join->on('admin_area.id', '=', 'matched_ward.quan_huyen_id')
+                                ->where('admin_area.loai', '=', 'moi');
+                        }),
+                    'admin_area',
+                )->get(),
+                'hanh_chinh_quan_huyen',
+                'moi',
+            );
+        }
 
         return $result;
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @param  Collection<int, object>  $rows
      * @return array<int, array<string, mixed>>
      */
-    private function formatAreaStats($rows, string $catalogTable): array
+    private function formatUnifiedAreaStats($rows, string $catalogTable, string $loai): array
     {
         $countsByCode = $rows
             ->filter(fn ($row) => $row->area_code !== null)
             ->keyBy(fn ($row) => (string) $row->area_code);
 
         $catalogRows = DB::table($catalogTable)
-            ->select(['code', 'full_name'])
-            ->orderBy('full_name')
+            ->where('loai', $loai)
+            ->select(['id', 'ten'])
+            ->orderBy('ten')
             ->get()
             ->map(function ($area) use ($countsByCode) {
-                $stats = $countsByCode->get((string) $area->code);
+                $stats = $countsByCode->get((string) $area->id);
 
                 return [
-                    'areaCode' => (string) $area->code,
-                    'areaName' => (string) $area->full_name,
+                    'areaCode' => (string) $area->id,
+                    'areaName' => (string) $area->ten,
                     'total' => (int) ($stats->total ?? 0),
                     'daDinhDanh' => (int) ($stats->da_dinh_danh ?? 0),
                     'canRaSoat' => (int) ($stats->can_ra_soat ?? 0),
@@ -286,7 +357,7 @@ class DashboardService
     private function selectCooperativeAreaCounts($query, string $areaAlias)
     {
         return $query
-            ->selectRaw("{$areaAlias}.code as area_code, {$areaAlias}.full_name as area_name")
+            ->selectRaw("{$areaAlias}.id as area_code, {$areaAlias}.ten as area_name")
             ->selectRaw('COUNT(DISTINCT hop_tac_xas.id) as total')
             ->selectRaw(
                 'COUNT(DISTINCT CASE WHEN cooperative_tax.id IS NOT NULL AND cooperative_tax.is_active = true THEN hop_tac_xas.id END) as da_dinh_danh',
@@ -297,11 +368,6 @@ class DashboardService
             ->selectRaw(
                 'COUNT(DISTINCT CASE WHEN cooperative_tax.id IS NULL THEN hop_tac_xas.id END) as chua_dinh_danh',
             )
-            ->groupBy("{$areaAlias}.code", "{$areaAlias}.full_name");
-    }
-
-    private function normalizedSql(string $column): Expression
-    {
-        return DB::raw("LOWER(TRIM({$column}))");
+            ->groupBy("{$areaAlias}.id", "{$areaAlias}.ten");
     }
 }

@@ -15,6 +15,7 @@ class DoanhNghiepHanhChinhTextMapper
      */
     public const CAMEL_TO_SNAKE = [
         'tinhThanhCu' => 'tinh_thanh_cu',
+        'tinhThanhMoi' => 'tinh_thanh_moi',
         'quanHuyenCu' => 'quan_huyen_cu',
         'quanHuyenMoi' => 'quan_huyen_moi',
         'phuongXaCu' => 'xa_phuong_cu',
@@ -24,28 +25,29 @@ class DoanhNghiepHanhChinhTextMapper
     ];
 
     /**
-     * Mã liên kết sẽ xóa khi text tương ứng được ghi (chờ sync lại).
+     * Liên kết (mã cũ + id danh mục hợp nhất) sẽ xóa khi text tương ứng được ghi (chờ sync lại).
      *
-     * @var array<string, string>
+     * @var array<string, array<int, string>>
      */
-    private const TEXT_CLEARS_CODE = [
-        'tinh_thanh_cu' => 'tinh_thanh_cu_code',
-        'quan_huyen_cu' => 'quan_huyen_cu_code',
-        'xa_phuong_cu' => 'xa_phuong_cu_code',
-        'quan_huyen_moi' => 'tinh_thanh_code',
-        'xa_phuong_moi' => 'xa_phuong_code',
+    private const TEXT_CLEARS_LINKS = [
+        'tinh_thanh_cu' => ['tinh_thanh_cu_code', 'tinh_thanh_cu_id'],
+        'tinh_thanh_moi' => ['tinh_thanh_moi_id'],
+        'quan_huyen_cu' => ['quan_huyen_cu_code', 'quan_huyen_cu_id'],
+        'xa_phuong_cu' => ['xa_phuong_cu_code', 'xa_phuong_cu_id'],
+        'quan_huyen_moi' => ['tinh_thanh_code', 'quan_huyen_moi_id'],
+        'xa_phuong_moi' => ['xa_phuong_code', 'xa_phuong_moi_id'],
     ];
 
     /**
      * @param  array<string, mixed>  $data  camelCase row / payload
-     * @return array<string, mixed>  snake_case columns to persist
+     * @return array<string, mixed> snake_case columns to persist
      */
     public function map(array $data): array
     {
         $snake = [];
 
         foreach (self::CAMEL_TO_SNAKE as $camel => $column) {
-            if (!array_key_exists($camel, $data)) {
+            if (! array_key_exists($camel, $data)) {
                 continue;
             }
 
@@ -53,9 +55,11 @@ class DoanhNghiepHanhChinhTextMapper
             $snake[$column] = $value === '' ? null : $value;
         }
 
-        foreach (self::TEXT_CLEARS_CODE as $textColumn => $codeColumn) {
+        foreach (self::TEXT_CLEARS_LINKS as $textColumn => $linkColumns) {
             if (array_key_exists($textColumn, $snake)) {
-                $snake[$codeColumn] = null;
+                foreach ($linkColumns as $linkColumn) {
+                    $snake[$linkColumn] = null;
+                }
             }
         }
 

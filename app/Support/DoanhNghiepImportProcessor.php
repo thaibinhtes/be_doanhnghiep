@@ -61,6 +61,7 @@ class DoanhNghiepImportProcessor
             'quanHuyen' => ['nullable', 'string', 'max:100'],
             'phuongXa' => ['nullable', 'string', 'max:100'],
             'tinhThanhCu' => ['nullable', 'string', 'max:255'],
+            'tinhThanhMoi' => ['nullable', 'string', 'max:255'],
             'quanHuyenCu' => ['nullable', 'string', 'max:255'],
             'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
             'phuongXaCu' => ['nullable', 'string', 'max:255'],

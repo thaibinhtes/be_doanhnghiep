@@ -31,6 +31,13 @@ class DoanhNghiep extends Model
         'quan_huyen_cu',
         'quan_huyen_moi',
         'tinh_thanh_cu',
+        'tinh_thanh_cu_id',
+        'tinh_thanh_moi',
+        'tinh_thanh_moi_id',
+        'quan_huyen_cu_id',
+        'xa_phuong_cu_id',
+        'quan_huyen_moi_id',
+        'xa_phuong_moi_id',
         'tinh_thanh_cu_code',
         'quan_huyen_cu_code',
         'xa_phuong_cu_code',
@@ -79,6 +86,7 @@ class DoanhNghiep extends Model
     {
         return $this->belongsTo(DanhMucNganhNghe::class, 'nganh_nghe_kd_chinh', 'ma');
     }
+
     /**
      * DoanhNghiep belongs to many Members with pivot data.
      */
@@ -167,5 +175,36 @@ class DoanhNghiep extends Model
     public function xaPhuong(): BelongsTo
     {
         return $this->belongsTo(XaPhuong::class, 'xa_phuong_code', 'code');
+    }
+
+    /** Danh mục hành chính hợp nhất (bảng tỉnh / quận huyện / phường xã, loai cu|moi). */
+    public function tinhThanhCuRef(): BelongsTo
+    {
+        return $this->belongsTo(HanhChinhTinh::class, 'tinh_thanh_cu_id');
+    }
+
+    public function tinhThanhMoiRef(): BelongsTo
+    {
+        return $this->belongsTo(HanhChinhTinh::class, 'tinh_thanh_moi_id');
+    }
+
+    public function quanHuyenCuRef(): BelongsTo
+    {
+        return $this->belongsTo(HanhChinhQuanHuyen::class, 'quan_huyen_cu_id');
+    }
+
+    public function xaPhuongCuRef(): BelongsTo
+    {
+        return $this->belongsTo(HanhChinhPhuongXa::class, 'xa_phuong_cu_id');
+    }
+
+    public function quanHuyenMoiRef(): BelongsTo
+    {
+        return $this->belongsTo(HanhChinhQuanHuyen::class, 'quan_huyen_moi_id');
+    }
+
+    public function xaPhuongMoiRef(): BelongsTo
+    {
+        return $this->belongsTo(HanhChinhPhuongXa::class, 'xa_phuong_moi_id');
     }
 }

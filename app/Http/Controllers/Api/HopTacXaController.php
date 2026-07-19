@@ -41,10 +41,10 @@ class HopTacXaController extends ApiController
 
     public function export(): BinaryFileResponse
     {
-        $filename = 'hop-tac-xa_' . now()->format('Y-m-d_His') . '.xlsx';
+        $filename = 'hop-tac-xa_'.now()->format('Y-m-d_His').'.xlsx';
 
         $query = $this->buildFilteredQuery();
-        if (!request('sortBy')) {
+        if (! request('sortBy')) {
             $query->reorder()->orderByRaw('tt IS NULL')->orderBy('tt')->orderBy('id');
         }
 
@@ -54,7 +54,7 @@ class HopTacXaController extends ApiController
     public function exportTemplate(): BinaryFileResponse
     {
         return Excel::download(
-            new HopTacXaTemplateExport(),
+            new HopTacXaTemplateExport,
             'mau-import-hop-tac-xa.xlsx'
         );
     }
@@ -173,7 +173,7 @@ class HopTacXaController extends ApiController
 
     public function show(HopTacXa $hopTacXa): JsonResponse
     {
-        if (!$this->userCanAccess($hopTacXa)) {
+        if (! $this->userCanAccess($hopTacXa)) {
             return $this->error('Không có quyền truy cập hợp tác xã này.', 403);
         }
 
@@ -184,7 +184,7 @@ class HopTacXaController extends ApiController
 
     public function update(HopTacXa $hopTacXa): JsonResponse
     {
-        if (!$this->userCanAccess($hopTacXa)) {
+        if (! $this->userCanAccess($hopTacXa)) {
             return $this->error('Không có quyền cập nhật hợp tác xã này.', 403);
         }
 
@@ -197,7 +197,7 @@ class HopTacXaController extends ApiController
 
     public function destroy(HopTacXa $hopTacXa): JsonResponse
     {
-        if (!$this->userCanAccess($hopTacXa)) {
+        if (! $this->userCanAccess($hopTacXa)) {
             return $this->error('Không có quyền xóa hợp tác xã này.', 403);
         }
 
@@ -223,8 +223,9 @@ class HopTacXaController extends ApiController
         $errors = [];
 
         foreach ($ids as $id) {
-            if (!in_array((int) $id, $accessibleIds, true)) {
+            if (! in_array((int) $id, $accessibleIds, true)) {
                 $errors[] = ['id' => (int) $id, 'message' => 'Không có quyền hoặc không tồn tại.'];
+
                 continue;
             }
         }
@@ -337,6 +338,7 @@ class HopTacXaController extends ApiController
             'quanHuyenCu' => ['nullable', 'string', 'max:255'],
             'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
             'tinhThanhCu' => ['nullable', 'string', 'max:255'],
+            'tinhThanhMoi' => ['nullable', 'string', 'max:255'],
             'dienTichHa' => ['nullable', 'numeric', 'min:0'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
             'soThanhVien' => ['nullable', 'integer', 'min:0'],

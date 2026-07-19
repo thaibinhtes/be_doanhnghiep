@@ -25,6 +25,7 @@ class HopTacXa extends Model
         'quan_huyen_cu',
         'quan_huyen_moi',
         'tinh_thanh_cu',
+        'tinh_thanh_moi',
         'dien_tich_ha',
         'von_dieu_le',
         'so_thanh_vien',

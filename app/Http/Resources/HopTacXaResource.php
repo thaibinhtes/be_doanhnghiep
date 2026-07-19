@@ -2,10 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\HopTacXa;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin \App\Models\HopTacXa */
+/** @mixin HopTacXa */
 class HopTacXaResource extends JsonResource
 {
     /**
@@ -30,6 +31,7 @@ class HopTacXaResource extends JsonResource
             'quanHuyenCu' => $this->quan_huyen_cu,
             'quanHuyenMoi' => $this->quan_huyen_moi,
             'tinhThanhCu' => $this->tinh_thanh_cu,
+            'tinhThanhMoi' => $this->tinh_thanh_moi,
             'dienTichHa' => $this->dien_tich_ha !== null ? (float) $this->dien_tich_ha : null,
             'vonDieuLe' => $this->von_dieu_le,
             'soThanhVien' => $this->so_thanh_vien,

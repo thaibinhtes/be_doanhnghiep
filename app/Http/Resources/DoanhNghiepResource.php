@@ -34,6 +34,7 @@ class DoanhNghiepResource extends JsonResource
             'tinhThanhCu' => $this->tinh_thanh_cu
                 ?? ($this->relationLoaded('tinhThanhCu') ? $this->tinhThanhCu?->full_name : null),
             'tinhThanhCuCode' => $this->tinh_thanh_cu_code,
+            'tinhThanhMoi' => $this->tinh_thanh_moi,
             'tinhThanhCuLinked' => $this->whenLoaded('tinhThanhCu', fn () => $this->tinhThanhCu ? [
                 'code' => $this->tinhThanhCu->code,
                 'fullName' => $this->tinhThanhCu->full_name,
@@ -70,6 +71,12 @@ class DoanhNghiepResource extends JsonResource
                 'code' => $this->xaPhuong?->code,
                 'fullName' => $this->xaPhuong?->full_name,
             ]),
+            'tinhThanhCuId' => $this->tinh_thanh_cu_id,
+            'tinhThanhMoiId' => $this->tinh_thanh_moi_id,
+            'quanHuyenCuId' => $this->quan_huyen_cu_id,
+            'xaPhuongCuId' => $this->xa_phuong_cu_id,
+            'quanHuyenMoiId' => $this->quan_huyen_moi_id,
+            'xaPhuongMoiId' => $this->xa_phuong_moi_id,
             'ghiChuHanhChinh' => $this->ghi_chu_hanh_chinh,
             'quanHuyenHanhChinhLinked' => $this->tinh_thanh_cu_code !== null
                 || $this->quan_huyen_cu_code !== null
@@ -137,25 +144,23 @@ class DoanhNghiepResource extends JsonResource
             'createdByUserId' => $this->created_by_user_id,
             'createdByUser' => $this->whenLoaded('createdByUser', fn () => new UserResource($this->createdByUser)),
             'dsCoDong' => $this->ds_co_dong,
-            'dsThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () =>
-                $this->memberCompanies->map(fn ($mc) => [
-                    'id' => $mc->id,
-                    'memberId' => $mc->member_id,
-                    'fullName' => $mc->member?->full_name ?? '',
-                    'dateJoin' => $mc->date_join,
-                    'position' => $mc->position,
-                    'investmentAmount' => $mc->investment_amount,
-                ])
+            'dsThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () => $this->memberCompanies->map(fn ($mc) => [
+                'id' => $mc->id,
+                'memberId' => $mc->member_id,
+                'fullName' => $mc->member?->full_name ?? '',
+                'dateJoin' => $mc->date_join,
+                'position' => $mc->position,
+                'investmentAmount' => $mc->investment_amount,
+            ])
             ),
-            'danhSachThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () =>
-                $this->memberCompanies->map(fn ($mc) => [
-                    'id' => $mc->id,
-                    'memberId' => $mc->member_id,
-                    'fullName' => $mc->member?->full_name ?? '',
-                    'dateJoin' => $mc->date_join,
-                    'position' => $mc->position,
-                    'investmentAmount' => $mc->investment_amount,
-                ])
+            'danhSachThanhVienGopVon' => $this->whenLoaded('memberCompanies', fn () => $this->memberCompanies->map(fn ($mc) => [
+                'id' => $mc->id,
+                'memberId' => $mc->member_id,
+                'fullName' => $mc->member?->full_name ?? '',
+                'dateJoin' => $mc->date_join,
+                'position' => $mc->position,
+                'investmentAmount' => $mc->investment_amount,
+            ])
             ),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),

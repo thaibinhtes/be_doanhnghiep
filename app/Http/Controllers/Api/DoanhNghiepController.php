@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exports\DoanhNghiepExport;
 use App\Exports\DoanhNghiepDinhDanhTemplateExport;
+use App\Exports\DoanhNghiepExport;
 use App\Exports\DoanhNghiepTemplateExport;
 use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
 use App\Http\Resources\DnDinhDanhLichSuResource;
 use App\Http\Resources\DoanhNghiepResource;
 use App\Jobs\ProcessDoanhNghiepFieldUpdateImportJob;
-use App\Jobs\ProcessDoanhNghiepImportJob;
 use App\Jobs\ProcessDoanhNghiepIdentityImportJob;
+use App\Jobs\ProcessDoanhNghiepImportJob;
 use App\Models\DoanhNghiep;
 use App\Models\DoanhNghiepImportJob;
 use App\Models\DonVi;
@@ -22,32 +22,33 @@ use App\Support\DoanhNghiepDinhDanhImportColumnMap;
 use App\Support\DoanhNghiepExcelColumns;
 use App\Support\DoanhNghiepFieldUpdateImportColumnMap;
 use App\Support\DoanhNghiepFieldUpdateRegistry;
-use App\Support\DoanhNghiepImportColumnMap;
-use InvalidArgumentException;
-use App\Support\ImportUploadLogger;
-use App\Support\ImportUploadValidator;
 use App\Support\DoanhNghiepHanhChinhTextMapper;
+use App\Support\DoanhNghiepImportColumnMap;
 use App\Support\DoanhNghiepImportExtensionHelper;
 use App\Support\DoanhNghiepLoaiHinhHelper;
 use App\Support\DoanhNghiepNganhNgheHelper;
 use App\Support\DoanhNghiepScopeHelper;
-use App\Support\DonViDataClearService;
 use App\Support\DoanhNghiepStatusHelper;
+use App\Support\DonViDataClearService;
 use App\Support\ImportExcelKindDetector;
 use App\Support\ImportExcelKindGuard;
 use App\Support\ImportJobScopeHelper;
 use App\Support\ImportSocketNotifier;
 use App\Support\ImportSocketTopics;
+use App\Support\ImportUploadLogger;
+use App\Support\ImportUploadValidator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DoanhNghiepController extends ApiController
 {
     private const DINH_DANH_LABEL_UPDATED = 'Đã cập nhật định danh';
+
     private const DINH_DANH_LABEL_PENDING = 'Chưa cập nhật định danh';
 
     /**
@@ -66,10 +67,10 @@ class DoanhNghiepController extends ApiController
      */
     public function export(): BinaryFileResponse
     {
-        $filename = 'doanh-nghiep_' . now()->format('Y-m-d_His') . '.xlsx';
+        $filename = 'doanh-nghiep_'.now()->format('Y-m-d_His').'.xlsx';
 
         $query = $this->buildFilteredQuery();
-        if (!request('sortBy')) {
+        if (! request('sortBy')) {
             $query->reorder()->orderByRaw('tt IS NULL')->orderBy('tt')->orderBy('id');
         }
 
@@ -85,7 +86,7 @@ class DoanhNghiepController extends ApiController
     public function exportTemplate(): BinaryFileResponse
     {
         return Excel::download(
-            new DoanhNghiepTemplateExport(),
+            new DoanhNghiepTemplateExport,
             'mau-import-doanh-nghiep.xlsx'
         );
     }
@@ -96,7 +97,7 @@ class DoanhNghiepController extends ApiController
     public function exportIdentityTemplate(): BinaryFileResponse
     {
         return Excel::download(
-            new DoanhNghiepDinhDanhTemplateExport(),
+            new DoanhNghiepDinhDanhTemplateExport,
             'mau-import-dinh-danh-doanh-nghiep.xlsx'
         );
     }
@@ -308,7 +309,7 @@ class DoanhNghiepController extends ApiController
         }
 
         $lookupField = (string) request('lookupField');
-        if (!DoanhNghiepFieldUpdateRegistry::isLookupField($lookupField)) {
+        if (! DoanhNghiepFieldUpdateRegistry::isLookupField($lookupField)) {
             ImportUploadValidator::throwError('Trường đối chiếu không hợp lệ.', 'invalid_lookup_field');
         }
 
@@ -409,7 +410,7 @@ class DoanhNghiepController extends ApiController
         $doanhNghiep = DinhDanhHistoryContext::run(['nguon' => 'tao_moi'], function () use ($data, $danhSachTV) {
             $company = DoanhNghiep::create($data);
 
-            if (!empty($danhSachTV)) {
+            if (! empty($danhSachTV)) {
                 $this->syncMembersToCompany($company, $danhSachTV);
             }
 
@@ -430,7 +431,7 @@ class DoanhNghiepController extends ApiController
      */
     public function show(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        if (!$this->userCanAccessCompany($doanhNghiep)) {
+        if (! $this->userCanAccessCompany($doanhNghiep)) {
             return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
         }
 
@@ -449,11 +450,11 @@ class DoanhNghiepController extends ApiController
         unset($validated['danhSachThanhVienGopVon']);
         $doanhNghiep = DoanhNghiepScopeHelper::query($request->user())->find($id);
 
-        if (!$doanhNghiep) {
-            return $this->error("Not found!");
+        if (! $doanhNghiep) {
+            return $this->error('Not found!');
         }
 
-        if (!$this->userCanAccessCompany($doanhNghiep)) {
+        if (! $this->userCanAccessCompany($doanhNghiep)) {
             return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
         }
 
@@ -463,7 +464,7 @@ class DoanhNghiepController extends ApiController
         $data = DoanhNghiepLoaiHinhHelper::applyLoaiHinh($data, $doanhNghiep);
         $data = DoanhNghiepNganhNgheHelper::apply($data);
 
-        if (!empty($data)) {
+        if (! empty($data)) {
             DinhDanhHistoryContext::run(['nguon' => 'cap_nhat'], function () use ($doanhNghiep, $data) {
                 $doanhNghiep->update($data);
                 $doanhNghiep->save();
@@ -488,7 +489,7 @@ class DoanhNghiepController extends ApiController
      */
     public function destroy(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        if (!$this->userCanAccessCompany($doanhNghiep)) {
+        if (! $this->userCanAccessCompany($doanhNghiep)) {
             return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
         }
 
@@ -516,7 +517,7 @@ class DoanhNghiepController extends ApiController
                 ->whereKey($id)
                 ->first();
 
-            if (!$company) {
+            if (! $company) {
                 $failed++;
                 $errors[] = [
                     'id' => $id,
@@ -598,7 +599,7 @@ class DoanhNghiepController extends ApiController
      */
     public function updateDinhDanh(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        if (!$this->userCanAccessCompany($doanhNghiep)) {
+        if (! $this->userCanAccessCompany($doanhNghiep)) {
             return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
         }
 
@@ -639,12 +640,13 @@ class DoanhNghiepController extends ApiController
                     ->where('ma_so_doanh_nghiep', $msdn)
                     ->first();
 
-                if (!$company) {
+                if (! $company) {
                     $failed++;
                     $errors[] = [
                         'row' => $index + 1,
                         'message' => "Không tìm thấy doanh nghiệp với MSDN {$msdn}.",
                     ];
+
                     continue;
                 }
 
@@ -669,7 +671,7 @@ class DoanhNghiepController extends ApiController
      */
     public function dinhDanhLichSu(DoanhNghiep $doanhNghiep): JsonResponse
     {
-        if (!$this->userCanAccessCompany($doanhNghiep)) {
+        if (! $this->userCanAccessCompany($doanhNghiep)) {
             return $this->error('Không có quyền truy cập doanh nghiệp này.', 403);
         }
 
@@ -703,7 +705,7 @@ class DoanhNghiepController extends ApiController
     private function syncMembersToCompany(DoanhNghiep $doanhNghiep, array $danhSachTV): void
     {
         foreach ($danhSachTV as $item) {
-            if (!is_array($item)) {
+            if (! is_array($item)) {
                 continue;
             }
 
@@ -714,7 +716,7 @@ class DoanhNghiepController extends ApiController
 
             $memberId = $item['memberId'] ?? null;
 
-            if (!$memberId) {
+            if (! $memberId) {
                 $member = Member::firstOrCreate(
                     ['full_name' => $fullName],
                     ['cccd' => null, 'status' => true]
@@ -829,6 +831,7 @@ class DoanhNghiepController extends ApiController
             'quanHuyen' => 'quan_huyen',
             'phuongXa' => 'phuong_xa',
             'tinhThanhCu' => 'tinh_thanh_cu',
+            'tinhThanhMoi' => 'tinh_thanh_moi',
             'quanHuyenCu' => 'quan_huyen_cu',
             'quanHuyenMoi' => 'quan_huyen_moi',
             'phuongXaCu' => 'xa_phuong_cu',
@@ -887,10 +890,10 @@ class DoanhNghiepController extends ApiController
         }
 
         // Alias từ FE (xaPhuongCu / xaPhuongMoi).
-        if (array_key_exists('xaPhuongCu', $validated) && !array_key_exists('phuongXaCu', $admin)) {
+        if (array_key_exists('xaPhuongCu', $validated) && ! array_key_exists('phuongXaCu', $admin)) {
             $admin['phuongXaCu'] = $validated['xaPhuongCu'];
         }
-        if (array_key_exists('xaPhuongMoi', $validated) && !array_key_exists('phuongXaMoi', $admin)) {
+        if (array_key_exists('xaPhuongMoi', $validated) && ! array_key_exists('phuongXaMoi', $admin)) {
             $admin['phuongXaMoi'] = $validated['xaPhuongMoi'];
         }
 

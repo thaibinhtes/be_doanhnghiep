@@ -315,21 +315,26 @@ class HanhChinhMappingController extends ApiController
 
     public function companyFieldSyncOptions(): JsonResponse
     {
-        return $this->success($this->syncService->companyFieldSyncOptions(), 'Lấy danh sách field đồng bộ thành công');
+        return $this->success(
+            $this->companyTextSyncService->fieldSyncOptions(),
+            'Lấy danh sách field đồng bộ thành công',
+        );
     }
 
     public function syncCompanyField(Request $request): JsonResponse
     {
         $payload = $request->validate([
-            'field' => ['required', 'string', 'in:quanHuyen,phuongXa'],
-            'sourceTable' => ['required', 'string', 'in:hanh_chinh_cu,hanh_chinh_moi'],
+            'field' => [
+                'required',
+                'string',
+                'in:tinhThanhCu,tinhThanhMoi,quanHuyenCu,quanHuyenMoi,phuongXaCu,phuongXaMoi',
+            ],
             'dryRun' => ['nullable', 'boolean'],
         ]);
 
         try {
-            $result = $this->syncService->syncCompanyField(
+            $result = $this->companyTextSyncService->syncField(
                 $payload['field'],
-                $payload['sourceTable'],
                 (bool) ($payload['dryRun'] ?? false),
                 $request->user(),
             );
