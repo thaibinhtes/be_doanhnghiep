@@ -261,8 +261,8 @@ class DoanhNghiepFieldUpdateProcessor
         $snake = DoanhNghiepStatusHelper::applyStatus($snake, $company);
 
         if ($adminPayload !== []) {
-            $linked = (new DoanhNghiepHanhChinhImportLinker)->resolveForUpdate($company, $adminPayload);
-            $snake = array_merge($snake, $linked['snake']);
+            $textMapped = (new DoanhNghiepHanhChinhTextMapper)->mapForUpdate($company, $adminPayload);
+            $snake = array_merge($snake, $textMapped);
         }
 
         return $snake;

@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Imports\HanhChinhLegacyColumnImport;
 use App\Http\Resources\HanhChinhMappingResource;
+use App\Imports\HanhChinhLegacyColumnImport;
 use App\Models\HanhChinhMapping;
+use App\Support\DoanhNghiepHanhChinhSyncService;
 use App\Support\HanhChinhImportColumnMap;
 use App\Support\HanhChinhSyncService;
 use Illuminate\Http\JsonResponse;
@@ -13,9 +14,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class HanhChinhMappingController extends ApiController
 {
-    public function __construct(private readonly HanhChinhSyncService $syncService)
-    {
-    }
+    public function __construct(
+        private readonly HanhChinhSyncService $syncService,
+        private readonly DoanhNghiepHanhChinhSyncService $companyTextSyncService,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -33,7 +35,7 @@ class HanhChinhMappingController extends ApiController
         }
 
         if ($request->filled('search')) {
-            $search = '%' . trim((string) $request->query('search')) . '%';
+            $search = '%'.trim((string) $request->query('search')).'%';
             $query->where(function ($builder) use ($search) {
                 $builder
                     ->whereHas('xaPhuongCu', fn ($q) => $q->where('full_name', 'like', $search))
@@ -71,9 +73,9 @@ class HanhChinhMappingController extends ApiController
         $groups = [];
 
         foreach ($mappings as $mapping) {
-            $groupKey = ($mapping->group_no ?? 'none') . ':' . $mapping->xa_phuong_moi_code;
+            $groupKey = ($mapping->group_no ?? 'none').':'.$mapping->xa_phuong_moi_code;
 
-            if (!isset($groups[$groupKey])) {
+            if (! isset($groups[$groupKey])) {
                 $groups[$groupKey] = [
                     'groupNo' => $mapping->group_no,
                     'xaPhuongMoiCode' => $mapping->xa_phuong_moi_code,
@@ -295,6 +297,20 @@ class HanhChinhMappingController extends ApiController
         $result = $this->syncService->syncCompanies((bool) ($payload['dryRun'] ?? false), $request->user());
 
         return $this->success($result, ($payload['dryRun'] ?? false) ? 'Dry-run đồng bộ hoàn tất' : 'Đồng bộ doanh nghiệp thành công');
+    }
+
+    public function syncCompanyTextCatalogs(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'dryRun' => ['nullable', 'boolean'],
+        ]);
+        $dryRun = (bool) ($payload['dryRun'] ?? false);
+        $result = $this->companyTextSyncService->sync($dryRun, $request->user());
+
+        return $this->success(
+            $result,
+            $dryRun ? 'Dry-run tạo danh mục hành chính hoàn tất' : 'Đồng bộ danh mục hành chính doanh nghiệp thành công',
+        );
     }
 
     public function companyFieldSyncOptions(): JsonResponse

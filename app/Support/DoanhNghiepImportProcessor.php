@@ -114,31 +114,26 @@ class DoanhNghiepImportProcessor
         $snakeData = DoanhNghiepExcelColumns::mapToSnake($data);
         $snakeData = DoanhNghiepNganhNgheHelper::apply($snakeData);
 
+        if (array_key_exists('loai_hinh_dn', $snakeData)) {
+            $snakeData['loai_hinh_dn'] = HanhChinhCodeGenerator::normalizeName((string) $snakeData['loai_hinh_dn']);
+            $snakeData['dn_loai_hinh_id'] = null;
+        }
+
         if ($this->rowHasAddressFields($data)) {
-            // Text địa bàn do linker ghi (match code / ghi chú), không lấy trực tiếp từ map.
-            unset(
-                $snakeData['dia_chi'],
-                $snakeData['quan_huyen'],
-                $snakeData['phuong_xa'],
-            );
-
-            $linked = (new DoanhNghiepHanhChinhImportLinker)->resolve($data);
-            $snakeData = array_merge($snakeData, $linked['snake']);
-
-            if ($linked['notes'] === []) {
-                $snakeData['ghi_chu_hanh_chinh'] = null;
-            }
+            // Bước 1: lưu địa bàn dạng text; mã danh mục đồng bộ ở bước sau.
+            $textMapped = (new DoanhNghiepHanhChinhTextMapper)->map($data);
+            $snakeData = array_merge($snakeData, $textMapped);
         }
 
         try {
             $existing = null;
 
-            if (!empty($snakeData['ma_so_doanh_nghiep'])) {
+            if (! empty($snakeData['ma_so_doanh_nghiep'])) {
                 $existing = DoanhNghiepScopeHelper::query($this->user)
                     ->where('ma_so_doanh_nghiep', $snakeData['ma_so_doanh_nghiep'])
                     ->first();
 
-                if (!$existing && DoanhNghiep::query()
+                if (! $existing && DoanhNghiep::query()
                     ->where('ma_so_doanh_nghiep', $snakeData['ma_so_doanh_nghiep'])
                     ->exists()) {
                     $this->recordFailure(
@@ -192,7 +187,7 @@ class DoanhNghiepImportProcessor
                 is_string($membersText) ? $membersText : null
             );
 
-            if (!empty($danhSachTV)) {
+            if (! empty($danhSachTV)) {
                 $doanhNghiep->memberCompanies()->delete();
                 $this->syncMembersToCompany($doanhNghiep, $danhSachTV);
             }
@@ -301,13 +296,13 @@ class DoanhNghiepImportProcessor
      */
     private function normalizeLegacyAddressAliases(array $data): array
     {
-        if ($this->hasValue($data['diaChi'] ?? null) && !$this->hasValue($data['diaChiCu'] ?? null)) {
+        if ($this->hasValue($data['diaChi'] ?? null) && ! $this->hasValue($data['diaChiCu'] ?? null)) {
             $data['diaChiCu'] = $data['diaChi'];
         }
-        if ($this->hasValue($data['quanHuyen'] ?? null) && !$this->hasValue($data['quanHuyenCu'] ?? null)) {
+        if ($this->hasValue($data['quanHuyen'] ?? null) && ! $this->hasValue($data['quanHuyenCu'] ?? null)) {
             $data['quanHuyenCu'] = $data['quanHuyen'];
         }
-        if ($this->hasValue($data['phuongXa'] ?? null) && !$this->hasValue($data['phuongXaCu'] ?? null)) {
+        if ($this->hasValue($data['phuongXa'] ?? null) && ! $this->hasValue($data['phuongXaCu'] ?? null)) {
             $data['phuongXaCu'] = $data['phuongXa'];
         }
 
@@ -357,7 +352,7 @@ class DoanhNghiepImportProcessor
 
             $memberId = $item['memberId'] ?? null;
 
-            if (!$memberId) {
+            if (! $memberId) {
                 $member = Member::firstOrCreate(
                     ['full_name' => $fullName],
                     ['cccd' => null, 'status' => true]

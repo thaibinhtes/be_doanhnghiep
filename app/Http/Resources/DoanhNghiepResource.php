@@ -31,26 +31,40 @@ class DoanhNghiepResource extends JsonResource
             'lat' => $this->lat !== null ? (float) $this->lat : null,
             'quanHuyen' => $this->quan_huyen,
             'phuongXa' => $this->phuong_xa,
+            'tinhThanhCu' => $this->tinh_thanh_cu
+                ?? ($this->relationLoaded('tinhThanhCu') ? $this->tinhThanhCu?->full_name : null),
             'tinhThanhCuCode' => $this->tinh_thanh_cu_code,
-            'tinhThanhCu' => $this->whenLoaded('tinhThanhCu', fn () => [
-                'code' => $this->tinhThanhCu?->code,
-                'fullName' => $this->tinhThanhCu?->full_name,
-            ]),
+            'tinhThanhCuLinked' => $this->whenLoaded('tinhThanhCu', fn () => $this->tinhThanhCu ? [
+                'code' => $this->tinhThanhCu->code,
+                'fullName' => $this->tinhThanhCu->full_name,
+            ] : null),
+            'quanHuyenCu' => $this->quan_huyen_cu
+                ?? ($this->relationLoaded('quanHuyenCu') ? $this->quanHuyenCu?->full_name : null),
             'quanHuyenCuCode' => $this->quan_huyen_cu_code,
-            'quanHuyenCu' => $this->whenLoaded('quanHuyenCu', fn () => [
-                'code' => $this->quanHuyenCu?->code,
-                'fullName' => $this->quanHuyenCu?->full_name,
-            ]),
+            'quanHuyenCuLinked' => $this->whenLoaded('quanHuyenCu', fn () => $this->quanHuyenCu ? [
+                'code' => $this->quanHuyenCu->code,
+                'fullName' => $this->quanHuyenCu->full_name,
+            ] : null),
+            'quanHuyenMoi' => $this->quan_huyen_moi
+                ?? ($this->relationLoaded('tinhThanh') ? $this->tinhThanh?->full_name : null),
             'tinhThanhCode' => $this->tinh_thanh_code,
             'tinhThanh' => $this->whenLoaded('tinhThanh', fn () => [
                 'code' => $this->tinhThanh?->code,
                 'fullName' => $this->tinhThanh?->full_name,
             ]),
+            'xaPhuongCu' => $this->xa_phuong_cu
+                ?? ($this->relationLoaded('xaPhuongCu') ? $this->xaPhuongCu?->full_name : null),
+            'phuongXaCu' => $this->xa_phuong_cu
+                ?? ($this->relationLoaded('xaPhuongCu') ? $this->xaPhuongCu?->full_name : null),
             'xaPhuongCuCode' => $this->xa_phuong_cu_code,
-            'xaPhuongCu' => $this->whenLoaded('xaPhuongCu', fn () => [
-                'code' => $this->xaPhuongCu?->code,
-                'fullName' => $this->xaPhuongCu?->full_name,
-            ]),
+            'xaPhuongCuLinked' => $this->whenLoaded('xaPhuongCu', fn () => $this->xaPhuongCu ? [
+                'code' => $this->xaPhuongCu->code,
+                'fullName' => $this->xaPhuongCu->full_name,
+            ] : null),
+            'xaPhuongMoi' => $this->xa_phuong_moi
+                ?? ($this->relationLoaded('xaPhuong') ? $this->xaPhuong?->full_name : null),
+            'phuongXaMoi' => $this->xa_phuong_moi
+                ?? ($this->relationLoaded('xaPhuong') ? $this->xaPhuong?->full_name : null),
             'xaPhuongCode' => $this->xa_phuong_code,
             'xaPhuong' => $this->whenLoaded('xaPhuong', fn () => [
                 'code' => $this->xaPhuong?->code,
@@ -167,16 +181,10 @@ class DoanhNghiepResource extends JsonResource
 
     private function resolveQuanHuyenCuMoiLabel(): ?string
     {
-        if ($this->quan_huyen_cu_code === null && $this->tinh_thanh_code === null) {
-            return null;
-        }
-
-        $cu = $this->relationLoaded('quanHuyenCu')
-            ? $this->quanHuyenCu?->full_name
-            : null;
-        $moi = $this->relationLoaded('tinhThanh')
-            ? $this->tinhThanh?->full_name
-            : null;
+        $cu = $this->quan_huyen_cu
+            ?? ($this->relationLoaded('quanHuyenCu') ? $this->quanHuyenCu?->full_name : null);
+        $moi = $this->quan_huyen_moi
+            ?? ($this->relationLoaded('tinhThanh') ? $this->tinhThanh?->full_name : null);
 
         if ($cu && $moi) {
             return "{$cu} / {$moi}";

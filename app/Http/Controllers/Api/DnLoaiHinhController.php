@@ -6,10 +6,14 @@ use App\Http\Requests\Api\StoreDnLoaiHinhRequest;
 use App\Http\Requests\Api\UpdateDnLoaiHinhRequest;
 use App\Http\Resources\DnLoaiHinhResource;
 use App\Models\DnLoaiHinh;
+use App\Support\DoanhNghiepLoaiHinhSyncService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DnLoaiHinhController extends ApiController
 {
+    public function __construct(private readonly DoanhNghiepLoaiHinhSyncService $syncService) {}
+
     public function index(): JsonResponse
     {
         $types = DnLoaiHinh::query()
@@ -31,7 +35,7 @@ class DnLoaiHinhController extends ApiController
     {
         $data = $this->mapToModel($request->validated());
 
-        if (!empty($data['mac_dinh'])) {
+        if (! empty($data['mac_dinh'])) {
             DnLoaiHinh::query()->update(['mac_dinh' => false]);
         }
 
@@ -51,15 +55,11 @@ class DnLoaiHinhController extends ApiController
     {
         $data = $this->mapToModel($request->validated());
 
-        if (!empty($data['mac_dinh'])) {
+        if (! empty($data['mac_dinh'])) {
             DnLoaiHinh::query()->where('id', '!=', $dnLoaiHinh->id)->update(['mac_dinh' => false]);
         }
 
         $dnLoaiHinh->update($data);
-
-        if (array_key_exists('ten', $data)) {
-            $dnLoaiHinh->doanhNghieps()->update(['loai_hinh_dn' => $dnLoaiHinh->ten]);
-        }
 
         return $this->success(new DnLoaiHinhResource($dnLoaiHinh->fresh()->loadCount('doanhNghieps')), 'Cập nhật loại hình thành công');
     }
@@ -73,6 +73,20 @@ class DnLoaiHinhController extends ApiController
         $dnLoaiHinh->delete();
 
         return $this->success(null, 'Xóa loại hình thành công');
+    }
+
+    public function syncFromCompanies(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'dryRun' => ['nullable', 'boolean'],
+        ]);
+        $dryRun = (bool) ($payload['dryRun'] ?? false);
+        $result = $this->syncService->sync($dryRun, $request->user());
+
+        return $this->success(
+            $result,
+            $dryRun ? 'Dry-run đồng bộ loại hình hoàn tất' : 'Đồng bộ loại hình doanh nghiệp thành công',
+        );
     }
 
     /**

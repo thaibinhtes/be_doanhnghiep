@@ -24,25 +24,25 @@ class DoanhNghiepLoaiHinhHelper
      */
     public static function applyLoaiHinh(array $data, ?DoanhNghiep $existing = null): array
     {
+        // Text là dữ liệu nguồn. Khi text được nhập/cập nhật, gỡ liên kết cũ
+        // và để bước đồng bộ danh mục tạo/tìm record rồi gán ID.
+        if (array_key_exists('loai_hinh_dn', $data)) {
+            $text = HanhChinhCodeGenerator::normalizeName((string) ($data['loai_hinh_dn'] ?? ''));
+            $data['loai_hinh_dn'] = $text === '' ? null : $text;
+            $data['dn_loai_hinh_id'] = null;
+
+            return $data;
+        }
+
         if (array_key_exists('dn_loai_hinh_id', $data) && $data['dn_loai_hinh_id']) {
             $type = DnLoaiHinh::query()->find($data['dn_loai_hinh_id']);
-            if (!$type || !$type->is_active) {
+            if (! $type || ! $type->is_active) {
                 throw ValidationException::withMessages([
                     'dnLoaiHinhId' => ['Loại hình doanh nghiệp không hợp lệ.'],
                 ]);
             }
 
             $data['loai_hinh_dn'] = $type->ten;
-
-            return $data;
-        }
-
-        if (!empty($data['loai_hinh_dn'])) {
-            $type = self::resolveByName((string) $data['loai_hinh_dn']);
-            if ($type) {
-                $data['dn_loai_hinh_id'] = $type->id;
-                $data['loai_hinh_dn'] = $type->ten;
-            }
 
             return $data;
         }

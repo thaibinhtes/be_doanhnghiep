@@ -86,17 +86,24 @@ class DoanhNghiepExcelColumns
 
     /**
      * Map camelCase keys to snake_case database columns.
-     * Address cũ/mới are resolved via DoanhNghiepHanhChinhImportLinker (not mapped here).
+     * Địa bàn hành chính lưu text trước; mã liên kết đồng bộ ở bước sau.
      */
     public const CAMEL_TO_SNAKE = [
         'tt' => 'tt',
         'maSoDoanhNghiep' => 'ma_so_doanh_nghiep',
         'tenDoanhNghiep' => 'ten_doanh_nghiep',
         'diaChi' => 'dia_chi',
+        'diaChiCu' => 'dia_chi_cu',
+        'diaChiMoi' => 'dia_chi_moi',
         'long' => 'long',
         'lat' => 'lat',
         'quanHuyen' => 'quan_huyen',
         'phuongXa' => 'phuong_xa',
+        'tinhThanhCu' => 'tinh_thanh_cu',
+        'quanHuyenCu' => 'quan_huyen_cu',
+        'quanHuyenMoi' => 'quan_huyen_moi',
+        'phuongXaCu' => 'xa_phuong_cu',
+        'phuongXaMoi' => 'xa_phuong_moi',
         'vonDieuLe' => 'von_dieu_le',
         'trangThai' => 'trang_thai',
         'daCapNhatDinhDanh' => 'da_cap_nhat_dinh_danh',
@@ -156,21 +163,16 @@ class DoanhNghiepExcelColumns
             'diaChi' => $model->dia_chi ?? '',
             'quanHuyen' => $model->quan_huyen ?? '',
             'phuongXa' => $model->phuong_xa ?? '',
-            'tinhThanhCu' => $model->relationLoaded('tinhThanhCu')
-                ? ($model->tinhThanhCu?->full_name ?? '')
-                : '',
-            'quanHuyenCu' => $model->relationLoaded('quanHuyenCu')
-                ? ($model->quanHuyenCu?->full_name ?? '')
-                : '',
-            'quanHuyenMoi' => $model->relationLoaded('tinhThanh')
-                ? ($model->tinhThanh?->full_name ?? '')
-                : '',
-            'phuongXaCu' => $model->relationLoaded('xaPhuongCu')
-                ? ($model->xaPhuongCu?->full_name ?? '')
-                : '',
-            'phuongXaMoi' => $model->relationLoaded('xaPhuong')
-                ? ($model->xaPhuong?->full_name ?? '')
-                : '',
+            'tinhThanhCu' => $model->tinh_thanh_cu
+                ?? ($model->relationLoaded('tinhThanhCu') ? ($model->tinhThanhCu?->full_name ?? '') : ''),
+            'quanHuyenCu' => $model->quan_huyen_cu
+                ?? ($model->relationLoaded('quanHuyenCu') ? ($model->quanHuyenCu?->full_name ?? '') : ''),
+            'quanHuyenMoi' => $model->quan_huyen_moi
+                ?? ($model->relationLoaded('tinhThanh') ? ($model->tinhThanh?->full_name ?? '') : ''),
+            'phuongXaCu' => $model->xa_phuong_cu
+                ?? ($model->relationLoaded('xaPhuongCu') ? ($model->xaPhuongCu?->full_name ?? '') : ''),
+            'phuongXaMoi' => $model->xa_phuong_moi
+                ?? ($model->relationLoaded('xaPhuong') ? ($model->xaPhuong?->full_name ?? '') : ''),
             'vonDieuLe' => $model->von_dieu_le !== null ? (string) $model->von_dieu_le : '',
             'trangThai' => $model->trang_thai ?? '',
             'dienThoai' => $model->dien_thoai !== null ? (string) $model->dien_thoai : '',

@@ -110,6 +110,7 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/hanh-chinh/mappings/{hanhChinhMapping}', [HanhChinhMappingController::class, 'destroy']);
         Route::post('/hanh-chinh/sync-doanh-nghiep', [HanhChinhMappingController::class, 'syncCompanies']);
         Route::post('/hanh-chinh/sync-doanh-nghiep-field', [HanhChinhMappingController::class, 'syncCompanyField']);
+        Route::post('/hanh-chinh/sync-doanh-nghiep-text-catalogs', [HanhChinhMappingController::class, 'syncCompanyTextCatalogs']);
     });
 
     Route::get('/reports/tong-hop', [ReportController::class, 'tongHop']);
@@ -131,6 +132,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/dn-loai-hinh/{dn_loai_hinh}', [DnLoaiHinhController::class, 'show']);
     Route::middleware('permission:feature.business-types.manage')->group(function () {
         Route::post('/dn-loai-hinh', [DnLoaiHinhController::class, 'store']);
+        Route::post('/dn-loai-hinh/sync-doanh-nghiep', [DnLoaiHinhController::class, 'syncFromCompanies']);
         Route::put('/dn-loai-hinh/{dn_loai_hinh}', [DnLoaiHinhController::class, 'update']);
         Route::patch('/dn-loai-hinh/{dn_loai_hinh}', [DnLoaiHinhController::class, 'update']);
         Route::delete('/dn-loai-hinh/{dn_loai_hinh}', [DnLoaiHinhController::class, 'destroy']);

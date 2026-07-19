@@ -26,6 +26,7 @@ use App\Support\DoanhNghiepImportColumnMap;
 use InvalidArgumentException;
 use App\Support\ImportUploadLogger;
 use App\Support\ImportUploadValidator;
+use App\Support\DoanhNghiepHanhChinhTextMapper;
 use App\Support\DoanhNghiepImportExtensionHelper;
 use App\Support\DoanhNghiepLoaiHinhHelper;
 use App\Support\DoanhNghiepNganhNgheHelper;
@@ -390,6 +391,7 @@ class DoanhNghiepController extends ApiController
         unset($validated['danhSachThanhVienGopVon']);
 
         $data = $this->mapCamelToSnake($validated);
+        $data = $this->applyHanhChinhTextFields($validated, $data);
         $data = DoanhNghiepStatusHelper::applyStatus($data);
         $data = DoanhNghiepLoaiHinhHelper::applyLoaiHinh($data);
         $data = DoanhNghiepNganhNgheHelper::apply($data);
@@ -456,6 +458,7 @@ class DoanhNghiepController extends ApiController
         }
 
         $data = $this->mapCamelToSnake($validated);
+        $data = $this->applyHanhChinhTextFields($validated, $data, $doanhNghiep);
         $data = DoanhNghiepStatusHelper::applyStatus($data, $doanhNghiep);
         $data = DoanhNghiepLoaiHinhHelper::applyLoaiHinh($data, $doanhNghiep);
         $data = DoanhNghiepNganhNgheHelper::apply($data);
@@ -819,10 +822,24 @@ class DoanhNghiepController extends ApiController
             'maSoDoanhNghiep' => 'ma_so_doanh_nghiep',
             'tenDoanhNghiep' => 'ten_doanh_nghiep',
             'diaChi' => 'dia_chi',
+            'diaChiCu' => 'dia_chi_cu',
+            'diaChiMoi' => 'dia_chi_moi',
             'long' => 'long',
             'lat' => 'lat',
             'quanHuyen' => 'quan_huyen',
             'phuongXa' => 'phuong_xa',
+            'tinhThanhCu' => 'tinh_thanh_cu',
+            'quanHuyenCu' => 'quan_huyen_cu',
+            'quanHuyenMoi' => 'quan_huyen_moi',
+            'phuongXaCu' => 'xa_phuong_cu',
+            'phuongXaMoi' => 'xa_phuong_moi',
+            'xaPhuongCu' => 'xa_phuong_cu',
+            'xaPhuongMoi' => 'xa_phuong_moi',
+            'tinhThanhCuCode' => 'tinh_thanh_cu_code',
+            'quanHuyenCuCode' => 'quan_huyen_cu_code',
+            'xaPhuongCuCode' => 'xa_phuong_cu_code',
+            'tinhThanhCode' => 'tinh_thanh_code',
+            'xaPhuongCode' => 'xa_phuong_code',
             'vonDieuLe' => 'von_dieu_le',
             'trangThai' => 'trang_thai',
             'dnTrangThaiId' => 'dn_trang_thai_id',
@@ -851,6 +868,42 @@ class DoanhNghiepController extends ApiController
         }
 
         return $result;
+    }
+
+    /**
+     * Chuẩn hóa địa bàn text từ payload API; xóa mã liên kết để chờ đồng bộ.
+     *
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, mixed>  $snakeData
+     * @return array<string, mixed>
+     */
+    private function applyHanhChinhTextFields(array $validated, array $snakeData, ?DoanhNghiep $company = null): array
+    {
+        $admin = [];
+        foreach (DoanhNghiepHanhChinhTextMapper::CAMEL_TO_SNAKE as $camel => $_) {
+            if (array_key_exists($camel, $validated)) {
+                $admin[$camel] = $validated[$camel];
+            }
+        }
+
+        // Alias từ FE (xaPhuongCu / xaPhuongMoi).
+        if (array_key_exists('xaPhuongCu', $validated) && !array_key_exists('phuongXaCu', $admin)) {
+            $admin['phuongXaCu'] = $validated['xaPhuongCu'];
+        }
+        if (array_key_exists('xaPhuongMoi', $validated) && !array_key_exists('phuongXaMoi', $admin)) {
+            $admin['phuongXaMoi'] = $validated['xaPhuongMoi'];
+        }
+
+        if ($admin === []) {
+            return $snakeData;
+        }
+
+        $mapper = new DoanhNghiepHanhChinhTextMapper;
+        $mapped = $company
+            ? $mapper->mapForUpdate($company, $admin)
+            : $mapper->map($admin);
+
+        return array_merge($snakeData, $mapped);
     }
 
     private function userCanAccessCompany(DoanhNghiep $doanhNghiep): bool
