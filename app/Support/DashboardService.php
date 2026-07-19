@@ -2,8 +2,9 @@
 
 namespace App\Support;
 
-use App\Models\DonVi;
 use App\Models\User;
+use Illuminate\Database\Query\Expression;
+use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
@@ -48,8 +49,8 @@ class DashboardService
 
         $progressTotalRow = collect($progress['rows'] ?? [])
             ->firstWhere('key', 'tong_cong');
-        $companyAreas = $this->buildCompanyAreaStats($user);
-        $cooperativeAreas = $this->buildCooperativeAreaStats($user);
+        $companyAreaBreakdowns = $this->buildCompanyAreaBreakdowns($user);
+        $cooperativeAreaBreakdowns = $this->buildCooperativeAreaBreakdowns($user);
 
         return [
             'generatedAt' => now()->toIso8601String(),
@@ -73,8 +74,14 @@ class DashboardService
                 'canRaSoat' => $cooperativeCanRaSoat,
                 'chuaDinhDanh' => $cooperativeChuaDinhDanh,
             ],
-            'companyAreas' => $companyAreas,
-            'cooperativeAreas' => $cooperativeAreas,
+            'areaOptions' => [
+                ['key' => 'quanHuyenMoi', 'label' => 'Quận / Huyện mới'],
+                ['key' => 'quanHuyenCu', 'label' => 'Quận / Huyện cũ'],
+                ['key' => 'phuongXaMoi', 'label' => 'Phường / Xã / Thị trấn mới'],
+                ['key' => 'phuongXaCu', 'label' => 'Phường / Xã / Thị trấn cũ'],
+            ],
+            'companyAreaBreakdowns' => $companyAreaBreakdowns,
+            'cooperativeAreaBreakdowns' => $cooperativeAreaBreakdowns,
             'summary' => $summary,
             'cooperativeSummary' => $cooperativeSummary,
             'progress' => [
@@ -88,88 +95,213 @@ class DashboardService
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array<string, array<int, array<string, mixed>>>
      */
-    private function buildCompanyAreaStats(?User $user): array
+    private function buildCompanyAreaBreakdowns(?User $user): array
     {
-        $rows = DoanhNghiepScopeHelper::query($user)
-            ->leftJoin(
-                'company_tax_managements as company_tax',
-                'company_tax.doanh_nghiep_id',
-                '=',
-                'doanh_nghieps.id',
-            )
-            ->select('doanh_nghieps.don_vi_id')
-            ->selectRaw('COUNT(doanh_nghieps.id) as total')
-            ->selectRaw('SUM(CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = true THEN 1 ELSE 0 END) as da_dinh_danh')
-            ->selectRaw(
-                'SUM(CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NOT NULL THEN 1 ELSE 0 END) as can_ra_soat',
-            )
-            ->selectRaw(
-                'SUM(CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NULL THEN 1 ELSE 0 END) as chua_dinh_danh',
-            )
-            ->groupBy('doanh_nghieps.don_vi_id')
-            ->get();
+        $dimensions = [
+            'quanHuyenMoi' => ['tinh_thanh', 'tinh_thanh_code', 'quan_huyen'],
+            'quanHuyenCu' => ['quan_huyen_cu', 'quan_huyen_cu_code', 'quan_huyen'],
+            'phuongXaMoi' => ['xa_phuong', 'xa_phuong_code', 'phuong_xa'],
+            'phuongXaCu' => ['xa_phuong_cu', 'xa_phuong_cu_code', 'phuong_xa'],
+        ];
 
-        return $this->formatAreaStats($rows);
+        $result = [];
+
+        foreach ($dimensions as $key => [$areaTable, $foreignKey, $textColumn]) {
+            $rows = DoanhNghiepScopeHelper::query($user)
+                ->leftJoin("{$areaTable} as admin_area", function ($join) use ($foreignKey, $textColumn) {
+                    $join->whereRaw(
+                        '(admin_area.code = doanh_nghieps.' . $foreignKey . '
+                            OR (
+                                NULLIF(doanh_nghieps.' . $foreignKey . ", '') IS NULL
+                                AND LOWER(TRIM(admin_area.full_name)) = LOWER(TRIM(doanh_nghieps." . $textColumn . '))
+                            ))',
+                    );
+                })
+                ->leftJoin(
+                    'company_tax_managements as company_tax',
+                    'company_tax.doanh_nghiep_id',
+                    '=',
+                    'doanh_nghieps.id',
+                )
+                ->selectRaw('admin_area.code as area_code, admin_area.full_name as area_name')
+                ->selectRaw('COUNT(DISTINCT doanh_nghieps.id) as total')
+                ->selectRaw(
+                    'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = true THEN doanh_nghieps.id END) as da_dinh_danh',
+                )
+                ->selectRaw(
+                    'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NOT NULL THEN doanh_nghieps.id END) as can_ra_soat',
+                )
+                ->selectRaw(
+                    'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NULL THEN doanh_nghieps.id END) as chua_dinh_danh',
+                )
+                ->groupBy('admin_area.code', 'admin_area.full_name')
+                ->get();
+
+            $result[$key] = $this->formatAreaStats($rows, $areaTable);
+        }
+
+        return $result;
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * HTX hiện lưu tên phường/xã dạng text. Ghép tên này với danh mục hành chính
+     * đã đồng bộ từ API để xác định đơn vị cũ/mới và cấp cha tương ứng.
+     *
+     * @return array<string, array<int, array<string, mixed>>>
      */
-    private function buildCooperativeAreaStats(?User $user): array
+    private function buildCooperativeAreaBreakdowns(?User $user): array
     {
-        $rows = HopTacXaScopeHelper::query($user)
-            ->leftJoin(
-                'cooperative_tax_managements as cooperative_tax',
-                'cooperative_tax.hop_tac_xa_id',
-                '=',
-                'hop_tac_xas.id',
-            )
-            ->select('hop_tac_xas.don_vi_id')
-            ->selectRaw('COUNT(hop_tac_xas.id) as total')
-            ->selectRaw(
-                'SUM(CASE WHEN cooperative_tax.id IS NOT NULL AND cooperative_tax.is_active = true THEN 1 ELSE 0 END) as da_dinh_danh',
-            )
-            ->selectRaw(
-                'SUM(CASE WHEN cooperative_tax.id IS NOT NULL AND cooperative_tax.is_active = false THEN 1 ELSE 0 END) as can_ra_soat',
-            )
-            ->selectRaw(
-                'SUM(CASE WHEN cooperative_tax.id IS NULL THEN 1 ELSE 0 END) as chua_dinh_danh',
-            )
-            ->groupBy('hop_tac_xas.don_vi_id')
-            ->get();
+        $result = [];
 
-        return $this->formatAreaStats($rows);
+        $result['phuongXaCu'] = $this->formatAreaStats(
+            $this->selectCooperativeAreaCounts(
+                $this->buildCooperativeAreaQuery($user)
+                    ->leftJoin('xa_phuong_cu as admin_area', function ($join) {
+                        $join->on(
+                            $this->normalizedSql('admin_area.full_name'),
+                            '=',
+                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
+                        );
+                    }),
+                'admin_area',
+            )->get(),
+            'xa_phuong_cu',
+        );
+
+        $result['quanHuyenCu'] = $this->formatAreaStats(
+            $this->selectCooperativeAreaCounts(
+                $this->buildCooperativeAreaQuery($user)
+                    ->leftJoin('xa_phuong_cu as matched_ward', function ($join) {
+                        $join->on(
+                            $this->normalizedSql('matched_ward.full_name'),
+                            '=',
+                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
+                        );
+                    })
+                    ->leftJoin(
+                        'quan_huyen_cu as admin_area',
+                        'admin_area.code',
+                        '=',
+                        'matched_ward.quan_huyen_cu_code',
+                    ),
+                'admin_area',
+            )->get(),
+            'quan_huyen_cu',
+        );
+
+        $result['phuongXaMoi'] = $this->formatAreaStats(
+            $this->selectCooperativeAreaCounts(
+                $this->buildCooperativeAreaQuery($user)
+                    ->leftJoin('xa_phuong as admin_area', function ($join) {
+                        $join->on(
+                            $this->normalizedSql('admin_area.full_name'),
+                            '=',
+                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
+                        );
+                    }),
+                'admin_area',
+            )->get(),
+            'xa_phuong',
+        );
+
+        $result['quanHuyenMoi'] = $this->formatAreaStats(
+            $this->selectCooperativeAreaCounts(
+                $this->buildCooperativeAreaQuery($user)
+                    ->leftJoin('xa_phuong as matched_ward', function ($join) {
+                        $join->on(
+                            $this->normalizedSql('matched_ward.full_name'),
+                            '=',
+                            $this->normalizedSql('hop_tac_xas.phuong_xa'),
+                        );
+                    })
+                    ->leftJoin(
+                        'tinh_thanh as admin_area',
+                        'admin_area.code',
+                        '=',
+                        'matched_ward.tinh_thanh_code',
+                    ),
+                'admin_area',
+            )->get(),
+            'tinh_thanh',
+        );
+
+        return $result;
     }
 
     /**
      * @param  \Illuminate\Support\Collection<int, object>  $rows
      * @return array<int, array<string, mixed>>
      */
-    private function formatAreaStats($rows): array
+    private function formatAreaStats($rows, string $catalogTable): array
     {
-        $unitNames = DonVi::query()
-            ->whereIn('id', $rows->pluck('don_vi_id')->filter()->all())
-            ->pluck('ten', 'id');
+        $countsByCode = $rows
+            ->filter(fn ($row) => $row->area_code !== null)
+            ->keyBy(fn ($row) => (string) $row->area_code);
 
-        return $rows
-            ->map(function ($row) use ($unitNames) {
-                $donViId = $row->don_vi_id !== null ? (int) $row->don_vi_id : null;
+        $catalogRows = DB::table($catalogTable)
+            ->select(['code', 'full_name'])
+            ->orderBy('full_name')
+            ->get()
+            ->map(function ($area) use ($countsByCode) {
+                $stats = $countsByCode->get((string) $area->code);
 
                 return [
-                    'donViId' => $donViId,
-                    'donViTen' => $donViId !== null
-                        ? (string) ($unitNames[$donViId] ?? "Đơn vị {$donViId}")
-                        : 'Chưa phân địa bàn',
-                    'total' => (int) $row->total,
-                    'daDinhDanh' => (int) $row->da_dinh_danh,
-                    'canRaSoat' => (int) $row->can_ra_soat,
-                    'chuaDinhDanh' => (int) $row->chua_dinh_danh,
+                    'areaCode' => (string) $area->code,
+                    'areaName' => (string) $area->full_name,
+                    'total' => (int) ($stats->total ?? 0),
+                    'daDinhDanh' => (int) ($stats->da_dinh_danh ?? 0),
+                    'canRaSoat' => (int) ($stats->can_ra_soat ?? 0),
+                    'chuaDinhDanh' => (int) ($stats->chua_dinh_danh ?? 0),
                 ];
-            })
-            ->sortBy('donViTen', SORT_NATURAL | SORT_FLAG_CASE)
-            ->values()
-            ->all();
+            });
+
+        $unlinked = $rows->first(fn ($row) => $row->area_code === null);
+        if ($unlinked && (int) $unlinked->total > 0) {
+            $catalogRows->push([
+                'areaCode' => null,
+                'areaName' => 'Chưa liên kết hành chính',
+                'total' => (int) $unlinked->total,
+                'daDinhDanh' => (int) $unlinked->da_dinh_danh,
+                'canRaSoat' => (int) $unlinked->can_ra_soat,
+                'chuaDinhDanh' => (int) $unlinked->chua_dinh_danh,
+            ]);
+        }
+
+        return $catalogRows->values()->all();
+    }
+
+    private function buildCooperativeAreaQuery(?User $user)
+    {
+        return HopTacXaScopeHelper::query($user)
+            ->leftJoin(
+                'cooperative_tax_managements as cooperative_tax',
+                'cooperative_tax.hop_tac_xa_id',
+                '=',
+                'hop_tac_xas.id',
+            );
+    }
+
+    private function selectCooperativeAreaCounts($query, string $areaAlias)
+    {
+        return $query
+            ->selectRaw("{$areaAlias}.code as area_code, {$areaAlias}.full_name as area_name")
+            ->selectRaw('COUNT(DISTINCT hop_tac_xas.id) as total')
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cooperative_tax.id IS NOT NULL AND cooperative_tax.is_active = true THEN hop_tac_xas.id END) as da_dinh_danh',
+            )
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cooperative_tax.id IS NOT NULL AND cooperative_tax.is_active = false THEN hop_tac_xas.id END) as can_ra_soat',
+            )
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN cooperative_tax.id IS NULL THEN hop_tac_xas.id END) as chua_dinh_danh',
+            )
+            ->groupBy("{$areaAlias}.code", "{$areaAlias}.full_name");
+    }
+
+    private function normalizedSql(string $column): Expression
+    {
+        return DB::raw("LOWER(TRIM({$column}))");
     }
 }
