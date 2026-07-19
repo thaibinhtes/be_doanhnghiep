@@ -60,6 +60,7 @@ class DoanhNghiepImportProcessor
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'quanHuyen' => ['nullable', 'string', 'max:100'],
             'phuongXa' => ['nullable', 'string', 'max:100'],
+            'tinhThanhCu' => ['nullable', 'string', 'max:255'],
             'quanHuyenCu' => ['nullable', 'string', 'max:255'],
             'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
             'phuongXaCu' => ['nullable', 'string', 'max:255'],
@@ -319,6 +320,7 @@ class DoanhNghiepImportProcessor
     private function rowHasAddressFields(array $data): bool
     {
         foreach ([
+            'tinhThanhCu',
             'quanHuyenCu',
             'quanHuyenMoi',
             'phuongXaCu',

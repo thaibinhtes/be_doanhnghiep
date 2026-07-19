@@ -26,6 +26,7 @@ class DoanhNghiep extends Model
         'lat',
         'quan_huyen',
         'phuong_xa',
+        'tinh_thanh_cu_code',
         'quan_huyen_cu_code',
         'xa_phuong_cu_code',
         'tinh_thanh_code',
@@ -141,6 +142,11 @@ class DoanhNghiep extends Model
     public function quanHuyenCu(): BelongsTo
     {
         return $this->belongsTo(QuanHuyenCu::class, 'quan_huyen_cu_code', 'code');
+    }
+
+    public function tinhThanhCu(): BelongsTo
+    {
+        return $this->belongsTo(TinhThanhCu::class, 'tinh_thanh_cu_code', 'code');
     }
 
     public function xaPhuongCu(): BelongsTo

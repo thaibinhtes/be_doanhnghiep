@@ -53,6 +53,13 @@ class HopTacXaImportProcessor
             'dienThoai' => ['nullable', 'string', 'max:50'],
             'diaChi' => ['nullable', 'string'],
             'phuongXa' => ['nullable', 'string', 'max:150'],
+            'diaChiCu' => ['nullable', 'string'],
+            'diaChiMoi' => ['nullable', 'string'],
+            'phuongXaCu' => ['nullable', 'string', 'max:255'],
+            'phuongXaMoi' => ['nullable', 'string', 'max:255'],
+            'quanHuyenCu' => ['nullable', 'string', 'max:255'],
+            'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
+            'tinhThanhCu' => ['nullable', 'string', 'max:255'],
             'dienTichHa' => ['nullable', 'numeric', 'min:0'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
             'soThanhVien' => ['nullable', 'integer', 'min:0'],
@@ -60,7 +67,6 @@ class HopTacXaImportProcessor
             'linhVuc' => ['nullable', 'string', 'max:255'],
             'hoatDong' => ['nullable', 'string', 'max:255'],
             'dsThanhVien' => ['nullable', 'string'],
-            'diaChiMoi' => ['nullable', 'string'],
             'ghiChu' => ['nullable', 'string'],
         ]);
 
@@ -89,6 +95,12 @@ class HopTacXaImportProcessor
         }
 
         $snakeData = HopTacXaExcelColumns::mapToSnake($data);
+        if (!empty($snakeData['dia_chi_cu']) && empty($snakeData['dia_chi'])) {
+            $snakeData['dia_chi'] = $snakeData['dia_chi_cu'];
+        }
+        if (!empty($snakeData['xa_phuong_cu']) && empty($snakeData['phuong_xa'])) {
+            $snakeData['phuong_xa'] = $snakeData['xa_phuong_cu'];
+        }
 
         try {
             $existing = null;

@@ -46,6 +46,7 @@ class DoanhNghiepFieldUpdateImportColumnMapTest extends TestCase
     {
         $this->assertTrue(DoanhNghiepFieldUpdateRegistry::isLookupField('dienThoai'));
         $this->assertTrue(DoanhNghiepFieldUpdateRegistry::isUpdateField('phuongXaCu'));
+        $this->assertTrue(DoanhNghiepFieldUpdateRegistry::isUpdateField('tinhThanhCu'));
         $this->assertFalse(DoanhNghiepFieldUpdateRegistry::isLookupField('phuongXaCu'));
         $this->assertFalse(DoanhNghiepFieldUpdateRegistry::isUpdateField('maSoDoanhNghiep'));
     }

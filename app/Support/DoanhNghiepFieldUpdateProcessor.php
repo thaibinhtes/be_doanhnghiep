@@ -203,6 +203,7 @@ class DoanhNghiepFieldUpdateProcessor
     {
         $all = [
             'tenDoanhNghiep' => ['string', 'max:255'],
+            'tinhThanhCu' => ['string', 'max:255'],
             'quanHuyenCu' => ['string', 'max:255'],
             'quanHuyenMoi' => ['string', 'max:255'],
             'phuongXaCu' => ['string', 'max:255'],

@@ -22,6 +22,7 @@ class DoanhNghiepExcelColumns
         'diaChi' => 'Địa chỉ trụ sở chính',
         'quanHuyen' => 'Quận / Huyện',
         'phuongXa' => 'Phường/xã',
+        'tinhThanhCu' => 'Cấp tỉnh (cũ)',
         'quanHuyenCu' => 'Quận / Huyện cũ',
         'quanHuyenMoi' => 'Quận / Huyện mới',
         'phuongXaCu' => 'Phường / Xã cũ',
@@ -48,7 +49,7 @@ class DoanhNghiepExcelColumns
 
     /**
      * Import mapping fields (không gồm Quận/Huyện + Phường/xã tổng).
-     * Địa bàn dùng 6 field: cũ/mới + địa chỉ cũ/mới.
+     * Địa bàn gồm cấp tỉnh cũ, quận/huyện cũ-mới, phường/xã cũ-mới và địa chỉ cũ-mới.
      *
      * @var array<string, string>
      */
@@ -56,6 +57,7 @@ class DoanhNghiepExcelColumns
         'tt' => 'TT',
         'maSoDoanhNghiep' => 'Mã số doanh nghiệp',
         'tenDoanhNghiep' => 'Tên doanh nghiệp',
+        'tinhThanhCu' => 'Cấp tỉnh (cũ)',
         'quanHuyenCu' => 'Quận / Huyện cũ',
         'quanHuyenMoi' => 'Quận / Huyện mới',
         'phuongXaCu' => 'Phường / Xã cũ',
@@ -154,6 +156,9 @@ class DoanhNghiepExcelColumns
             'diaChi' => $model->dia_chi ?? '',
             'quanHuyen' => $model->quan_huyen ?? '',
             'phuongXa' => $model->phuong_xa ?? '',
+            'tinhThanhCu' => $model->relationLoaded('tinhThanhCu')
+                ? ($model->tinhThanhCu?->full_name ?? '')
+                : '',
             'quanHuyenCu' => $model->relationLoaded('quanHuyenCu')
                 ? ($model->quanHuyenCu?->full_name ?? '')
                 : '',

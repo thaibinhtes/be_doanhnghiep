@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\DoanhNghiep;
 use App\Models\QuanHuyenCu;
 use App\Models\TinhThanh;
+use App\Models\TinhThanhCu;
 use App\Models\XaPhuong;
 use App\Models\XaPhuongCu;
 
@@ -47,6 +48,14 @@ class DoanhNghiepHanhChinhImportLinker
         $notes = $resolved['notes'];
 
         // Chỉ giữ thay đổi thuộc field người dùng thực sự gửi lên.
+        if (
+            !array_key_exists('tinhThanhCu', $data)
+            && !array_key_exists('quanHuyenCu', $data)
+            && !array_key_exists('phuongXaCu', $data)
+        ) {
+            unset($snake['tinh_thanh_cu_code']);
+        }
+
         if (!array_key_exists('quanHuyenCu', $data)) {
             unset($snake['quan_huyen_cu_code']);
             if (!array_key_exists('quanHuyenMoi', $data) && !array_key_exists('phuongXaMoi', $data)) {
@@ -92,6 +101,9 @@ class DoanhNghiepHanhChinhImportLinker
         }
 
         // Xóa mã khi text không khớp danh mục.
+        if (array_key_exists('tinhThanhCu', $data) && empty($snake['tinh_thanh_cu_code'])) {
+            $snake['tinh_thanh_cu_code'] = null;
+        }
         if (array_key_exists('quanHuyenCu', $data) && empty($snake['quan_huyen_cu_code'])) {
             $snake['quan_huyen_cu_code'] = null;
         }
@@ -133,6 +145,7 @@ class DoanhNghiepHanhChinhImportLinker
         $notes = [];
         $snake = [];
 
+        $tinhCu = HanhChinhCodeGenerator::normalizeName((string) ($data['tinhThanhCu'] ?? ''));
         $quanCu = HanhChinhCodeGenerator::normalizeName((string) ($data['quanHuyenCu'] ?? ''));
         $quanMoi = HanhChinhCodeGenerator::normalizeName((string) ($data['quanHuyenMoi'] ?? ''));
         $xaCu = HanhChinhCodeGenerator::normalizeName((string) ($data['phuongXaCu'] ?? ''));
@@ -154,11 +167,22 @@ class DoanhNghiepHanhChinhImportLinker
             $snake['dia_chi'] = $diaChiCu;
         }
 
+        $legacyProvince = null;
+        if ($tinhCu !== '') {
+            $legacyProvince = $this->findLegacyProvince($tinhCu);
+            if ($legacyProvince) {
+                $snake['tinh_thanh_cu_code'] = $legacyProvince->code;
+            } else {
+                $notes[] = "Tỉnh/Thành phố cũ chưa khớp danh mục: {$tinhCu}";
+            }
+        }
+
         $legacyDistrict = null;
         if ($quanCu !== '') {
-            $legacyDistrict = $this->findLegacyDistrict($quanCu);
+            $legacyDistrict = $this->findLegacyDistrict($quanCu, $legacyProvince?->code);
             if ($legacyDistrict) {
                 $snake['quan_huyen_cu_code'] = $legacyDistrict->code;
+                $snake['tinh_thanh_cu_code'] = $legacyDistrict->tinh_thanh_cu_code;
             } else {
                 $notes[] = "Quận/Huyện cũ chưa khớp danh mục: {$quanCu}";
             }
@@ -185,6 +209,10 @@ class DoanhNghiepHanhChinhImportLinker
                 $snake['xa_phuong_cu_code'] = $legacyWard->code;
                 if (empty($snake['quan_huyen_cu_code']) && $legacyWard->quan_huyen_cu_code) {
                     $snake['quan_huyen_cu_code'] = $legacyWard->quan_huyen_cu_code;
+                }
+                if (empty($snake['tinh_thanh_cu_code']) && $legacyWard->quan_huyen_cu_code) {
+                    $wardDistrict = QuanHuyenCu::query()->where('code', $legacyWard->quan_huyen_cu_code)->first();
+                    $snake['tinh_thanh_cu_code'] = $wardDistrict?->tinh_thanh_cu_code;
                 }
             } else {
                 $notes[] = "Phường/Xã cũ chưa khớp danh mục: {$xaCu}";
@@ -218,9 +246,9 @@ class DoanhNghiepHanhChinhImportLinker
         ];
     }
 
-    private function findLegacyDistrict(string $name): ?QuanHuyenCu
+    private function findLegacyProvince(string $name): ?TinhThanhCu
     {
-        $exact = QuanHuyenCu::query()->where('full_name', $name)->get();
+        $exact = TinhThanhCu::query()->where('full_name', $name)->get();
         if ($exact->count() === 1) {
             return $exact->first();
         }
@@ -228,9 +256,33 @@ class DoanhNghiepHanhChinhImportLinker
             return null;
         }
 
-        $lower = QuanHuyenCu::query()
+        $lower = TinhThanhCu::query()
             ->whereRaw('LOWER(full_name) = ?', [mb_strtolower($name)])
             ->get();
+
+        return $lower->count() === 1 ? $lower->first() : null;
+    }
+
+    private function findLegacyDistrict(string $name, ?string $provinceCode = null): ?QuanHuyenCu
+    {
+        $query = QuanHuyenCu::query()->where('full_name', $name);
+        if ($provinceCode) {
+            $query->where('tinh_thanh_cu_code', $provinceCode);
+        }
+        $exact = $query->get();
+        if ($exact->count() === 1) {
+            return $exact->first();
+        }
+        if ($exact->count() > 1) {
+            return null;
+        }
+
+        $lowerQuery = QuanHuyenCu::query()
+            ->whereRaw('LOWER(full_name) = ?', [mb_strtolower($name)]);
+        if ($provinceCode) {
+            $lowerQuery->where('tinh_thanh_cu_code', $provinceCode);
+        }
+        $lower = $lowerQuery->get();
 
         return $lower->count() === 1 ? $lower->first() : null;
     }

@@ -12,6 +12,7 @@ class DoanhNghiepFieldUpdateRegistry
 
     public const UPDATE_FIELDS = [
         'tenDoanhNghiep' => 'Tên doanh nghiệp',
+        'tinhThanhCu' => 'Cấp tỉnh (cũ)',
         'quanHuyenCu' => 'Quận / Huyện cũ',
         'quanHuyenMoi' => 'Quận / Huyện mới',
         'phuongXaCu' => 'Phường / Xã cũ',
@@ -38,6 +39,7 @@ class DoanhNghiepFieldUpdateRegistry
 
     /** @var list<string> */
     public const ADMIN_FIELDS = [
+        'tinhThanhCu',
         'quanHuyenCu',
         'quanHuyenMoi',
         'phuongXaCu',

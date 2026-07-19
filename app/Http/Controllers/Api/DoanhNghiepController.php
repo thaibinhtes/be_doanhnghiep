@@ -414,7 +414,7 @@ class DoanhNghiepController extends ApiController
             return $company;
         });
 
-        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser']);
+        $doanhNghiep->load(['chuSoHuu', 'nguoiDaiDien', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'tinhThanhCu', 'quanHuyenCu', 'xaPhuongCu', 'tinhThanh', 'xaPhuong']);
 
         return $this->success(
             new DoanhNghiepResource($doanhNghiep),
@@ -735,7 +735,7 @@ class DoanhNghiepController extends ApiController
         $user = request()->user();
         $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
         $query = DoanhNghiepScopeHelper::query($user)
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'quanHuyenCu', 'xaPhuongCu', 'tinhThanh', 'xaPhuong', 'taxManagement']);
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'tinhThanhCu', 'quanHuyenCu', 'xaPhuongCu', 'tinhThanh', 'xaPhuong', 'taxManagement']);
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = DoanhNghiepScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);

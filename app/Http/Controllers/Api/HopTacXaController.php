@@ -330,6 +330,13 @@ class HopTacXaController extends ApiController
             'dienThoai' => ['nullable', 'string', 'max:50'],
             'diaChi' => ['nullable', 'string'],
             'phuongXa' => ['nullable', 'string', 'max:150'],
+            'diaChiCu' => ['nullable', 'string'],
+            'diaChiMoi' => ['nullable', 'string'],
+            'phuongXaCu' => ['nullable', 'string', 'max:255'],
+            'phuongXaMoi' => ['nullable', 'string', 'max:255'],
+            'quanHuyenCu' => ['nullable', 'string', 'max:255'],
+            'quanHuyenMoi' => ['nullable', 'string', 'max:255'],
+            'tinhThanhCu' => ['nullable', 'string', 'max:255'],
             'dienTichHa' => ['nullable', 'numeric', 'min:0'],
             'vonDieuLe' => ['nullable', 'string', 'max:100'],
             'soThanhVien' => ['nullable', 'integer', 'min:0'],
@@ -337,7 +344,6 @@ class HopTacXaController extends ApiController
             'linhVuc' => ['nullable', 'string', 'max:255'],
             'hoatDong' => ['nullable', 'string', 'max:255'],
             'dsThanhVien' => ['nullable', 'string'],
-            'diaChiMoi' => ['nullable', 'string'],
             'ghiChu' => ['nullable', 'string'],
         ];
 

@@ -31,6 +31,11 @@ class DoanhNghiepResource extends JsonResource
             'lat' => $this->lat !== null ? (float) $this->lat : null,
             'quanHuyen' => $this->quan_huyen,
             'phuongXa' => $this->phuong_xa,
+            'tinhThanhCuCode' => $this->tinh_thanh_cu_code,
+            'tinhThanhCu' => $this->whenLoaded('tinhThanhCu', fn () => [
+                'code' => $this->tinhThanhCu?->code,
+                'fullName' => $this->tinhThanhCu?->full_name,
+            ]),
             'quanHuyenCuCode' => $this->quan_huyen_cu_code,
             'quanHuyenCu' => $this->whenLoaded('quanHuyenCu', fn () => [
                 'code' => $this->quanHuyenCu?->code,
@@ -52,7 +57,9 @@ class DoanhNghiepResource extends JsonResource
                 'fullName' => $this->xaPhuong?->full_name,
             ]),
             'ghiChuHanhChinh' => $this->ghi_chu_hanh_chinh,
-            'quanHuyenHanhChinhLinked' => $this->quan_huyen_cu_code !== null || $this->tinh_thanh_code !== null,
+            'quanHuyenHanhChinhLinked' => $this->tinh_thanh_cu_code !== null
+                || $this->quan_huyen_cu_code !== null
+                || $this->tinh_thanh_code !== null,
             'quanHuyenCuMoiLabel' => $this->resolveQuanHuyenCuMoiLabel(),
             'vonDieuLe' => $this->von_dieu_le,
             'trangThai' => $this->trang_thai,
