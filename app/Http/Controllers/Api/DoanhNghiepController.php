@@ -9,6 +9,7 @@ use App\Http\Requests\Api\StoreDoanhNghiepRequest;
 use App\Http\Requests\Api\UpdateDoanhNghiepRequest;
 use App\Http\Resources\DnDinhDanhLichSuResource;
 use App\Http\Resources\DoanhNghiepResource;
+use App\Jobs\ProcessDoanhNghiepFieldUpdateImportJob;
 use App\Jobs\ProcessDoanhNghiepImportJob;
 use App\Jobs\ProcessDoanhNghiepIdentityImportJob;
 use App\Models\DoanhNghiep;
@@ -19,7 +20,10 @@ use App\Models\User;
 use App\Support\DinhDanhHistoryContext;
 use App\Support\DoanhNghiepDinhDanhImportColumnMap;
 use App\Support\DoanhNghiepExcelColumns;
+use App\Support\DoanhNghiepFieldUpdateImportColumnMap;
+use App\Support\DoanhNghiepFieldUpdateRegistry;
 use App\Support\DoanhNghiepImportColumnMap;
+use InvalidArgumentException;
 use App\Support\ImportUploadLogger;
 use App\Support\ImportUploadValidator;
 use App\Support\DoanhNghiepImportExtensionHelper;
@@ -267,6 +271,113 @@ class DoanhNghiepController extends ApiController
                 'maSoDoanhNghiep' => DoanhNghiepExcelColumns::COLUMNS['maSoDoanhNghiep'],
             ],
         ]);
+    }
+
+    /**
+     * Whitelist + default mapping for bulk field updates from Excel.
+     */
+    public function importFieldUpdateColumnMap(): JsonResponse
+    {
+        $options = DoanhNghiepFieldUpdateRegistry::options();
+
+        return $this->success([
+            'startRow' => DoanhNghiepFieldUpdateImportColumnMap::DEFAULT_START_ROW,
+            'lookupField' => DoanhNghiepFieldUpdateImportColumnMap::DEFAULT_LOOKUP_FIELD,
+            'columnMap' => DoanhNghiepFieldUpdateImportColumnMap::DEFAULT_COLUMN_MAP,
+            'lookupFields' => $options['lookupFields'],
+            'updateFields' => $options['updateFields'],
+            'columnLabels' => array_merge($options['lookupFields'], $options['updateFields']),
+        ]);
+    }
+
+    /**
+     * Queue bulk field updates from Excel (update-only, never create).
+     */
+    public function importFieldUpdates(): JsonResponse
+    {
+        ImportUploadValidator::validate(request(), 'doanh_nghiep_import_field_updates', [
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'lookupField' => ['required', 'string'],
+            'columnMap' => ['required'],
+        ]);
+
+        $user = request()->user();
+        if ($response = $this->ensureUserHasDonViForAssignment($user)) {
+            return $response;
+        }
+
+        $lookupField = (string) request('lookupField');
+        if (!DoanhNghiepFieldUpdateRegistry::isLookupField($lookupField)) {
+            ImportUploadValidator::throwError('Trường đối chiếu không hợp lệ.', 'invalid_lookup_field');
+        }
+
+        $startRow = request()->has('startRow')
+            ? (int) request('startRow')
+            : DoanhNghiepFieldUpdateImportColumnMap::DEFAULT_START_ROW;
+
+        $columnMap = DoanhNghiepFieldUpdateImportColumnMap::normalizeStoredColumnMap(
+            $this->parseImportColumnMap(request()->input('columnMap')) ?? []
+        );
+
+        try {
+            DoanhNghiepFieldUpdateImportColumnMap::assertValid($columnMap, $lookupField);
+        } catch (InvalidArgumentException $exception) {
+            ImportUploadValidator::throwError($exception->getMessage(), 'invalid_column_map');
+        }
+
+        try {
+            $uploadedFile = request()->file('file');
+            $storedPath = $uploadedFile->store('imports/pending');
+        } catch (\Throwable $e) {
+            ImportUploadLogger::exception('doanh_nghiep_import_field_updates', request(), $e, 'store_file');
+            ImportUploadValidator::throwError(
+                'Không lưu được file upload. Kiểm tra quyền thư mục storage/app/imports.',
+                'store_failed',
+            );
+        }
+
+        $importJob = DoanhNghiepImportJob::query()->create([
+            'user_id' => $user->id,
+            'don_vi_id' => ImportJobScopeHelper::resolveDonViId($user),
+            'status' => DoanhNghiepImportJob::STATUS_PENDING,
+            'type' => DoanhNghiepImportJob::TYPE_FIELD_UPDATES,
+            'file_path' => $storedPath,
+            'original_filename' => $uploadedFile->getClientOriginalName(),
+            'start_row' => $startRow,
+            'column_map' => $columnMap,
+            'value_extensions' => ['lookupField' => $lookupField],
+            'use_column_map' => true,
+        ]);
+
+        ProcessDoanhNghiepFieldUpdateImportJob::dispatch($importJob->id);
+
+        ImportUploadLogger::succeeded('doanh_nghiep_import_field_updates', request(), [
+            'import_job_id' => $importJob->id,
+            'stored_path' => $storedPath,
+            'original_filename' => $importJob->original_filename,
+        ]);
+
+        ImportSocketNotifier::notify(
+            $user->id,
+            ImportSocketTopics::EXCEL_STARTED,
+            $importJob->id,
+            [
+                'status' => DoanhNghiepImportJob::STATUS_PENDING,
+                'originalFilename' => $importJob->original_filename,
+                'entity' => 'doanh-nghiep',
+            ],
+        );
+
+        return $this->success(
+            [
+                'importJobId' => $importJob->id,
+                'status' => $importJob->status,
+                'originalFilename' => $importJob->original_filename,
+                'entity' => 'doanh-nghiep',
+            ],
+            'Đã đưa file cập nhật field vào hàng đợi. Bạn sẽ nhận thông báo khi hoàn tất.',
+            202,
+        );
     }
 
     /**

@@ -18,6 +18,7 @@ class DoanhNghiepImportJob extends Model
 
     public const TYPE_COMPANIES = 'companies';
     public const TYPE_IDENTITIES = 'identities';
+    public const TYPE_FIELD_UPDATES = 'field_updates';
 
     protected $fillable = [
         'user_id',

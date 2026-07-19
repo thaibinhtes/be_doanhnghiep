@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\DoanhNghiep;
 use App\Models\QuanHuyenCu;
 use App\Models\TinhThanh;
 use App\Models\XaPhuong;
@@ -13,6 +14,113 @@ use App\Models\XaPhuongCu;
  */
 class DoanhNghiepHanhChinhImportLinker
 {
+    /**
+     * Cập nhật một phần field hành chính: resolve lại mã liên kết theo phạm vi DN hiện có.
+     *
+     * @param  array<string, mixed>  $data  camelCase partial update payload
+     * @return array{
+     *     snake: array<string, mixed>,
+     *     notes: list<string>
+     * }
+     */
+    public function resolveForUpdate(DoanhNghiep $company, array $data): array
+    {
+        $enriched = $data;
+
+        // Bổ sung ngữ cảnh quận/huyện hiện có khi chỉ cập nhật xã/phường.
+        if (isset($data['phuongXaCu']) && !isset($data['quanHuyenCu']) && $company->quan_huyen_cu_code) {
+            $district = QuanHuyenCu::query()->where('code', $company->quan_huyen_cu_code)->first();
+            if ($district) {
+                $enriched['quanHuyenCu'] = $district->full_name;
+            }
+        }
+
+        if (isset($data['phuongXaMoi']) && !isset($data['quanHuyenMoi']) && $company->tinh_thanh_code) {
+            $province = TinhThanh::query()->where('code', $company->tinh_thanh_code)->first();
+            if ($province) {
+                $enriched['quanHuyenMoi'] = $province->full_name;
+            }
+        }
+
+        $resolved = $this->resolve($enriched);
+        $snake = $resolved['snake'];
+        $notes = $resolved['notes'];
+
+        // Chỉ giữ thay đổi thuộc field người dùng thực sự gửi lên.
+        if (!array_key_exists('quanHuyenCu', $data)) {
+            unset($snake['quan_huyen_cu_code']);
+            if (!array_key_exists('quanHuyenMoi', $data) && !array_key_exists('phuongXaMoi', $data)) {
+                // quan_huyen display có thể đến từ legacy district context — bỏ nếu không gửi.
+                if (!array_key_exists('phuongXaCu', $data)) {
+                    unset($snake['quan_huyen']);
+                }
+            }
+        }
+
+        if (!array_key_exists('quanHuyenMoi', $data)) {
+            if (!array_key_exists('phuongXaMoi', $data)) {
+                unset($snake['tinh_thanh_code']);
+            }
+            // Không ghi đè quan_huyen từ context quanHuyenMoi giả lập.
+            if (!array_key_exists('quanHuyenCu', $data) && isset($enriched['quanHuyenMoi']) && !isset($data['quanHuyenMoi'])) {
+                unset($snake['quan_huyen'], $snake['tinh_thanh_code']);
+            }
+        }
+
+        if (!array_key_exists('phuongXaCu', $data)) {
+            unset($snake['xa_phuong_cu_code']);
+            if (!array_key_exists('phuongXaMoi', $data)) {
+                unset($snake['phuong_xa']);
+            }
+        }
+
+        if (!array_key_exists('phuongXaMoi', $data)) {
+            unset($snake['xa_phuong_code']);
+            if (!array_key_exists('phuongXaCu', $data)) {
+                unset($snake['phuong_xa']);
+            }
+        }
+
+        if (!array_key_exists('diaChiCu', $data)) {
+            unset($snake['dia_chi_cu']);
+        }
+        if (!array_key_exists('diaChiMoi', $data)) {
+            unset($snake['dia_chi_moi']);
+        }
+        if (!array_key_exists('diaChiCu', $data) && !array_key_exists('diaChiMoi', $data)) {
+            unset($snake['dia_chi']);
+        }
+
+        // Xóa mã khi text không khớp danh mục.
+        if (array_key_exists('quanHuyenCu', $data) && empty($snake['quan_huyen_cu_code'])) {
+            $snake['quan_huyen_cu_code'] = null;
+        }
+        if (array_key_exists('phuongXaCu', $data) && empty($snake['xa_phuong_cu_code'])) {
+            $snake['xa_phuong_cu_code'] = null;
+        }
+        if (array_key_exists('quanHuyenMoi', $data) && empty($snake['tinh_thanh_code'])) {
+            $snake['tinh_thanh_code'] = null;
+        }
+        if (array_key_exists('phuongXaMoi', $data) && empty($snake['xa_phuong_code'])) {
+            $snake['xa_phuong_code'] = null;
+        }
+
+        if ($notes !== []) {
+            $existing = trim((string) ($company->ghi_chu_hanh_chinh ?? ''));
+            $joined = implode(' | ', $notes);
+            $snake['ghi_chu_hanh_chinh'] = $existing === '' || str_contains($existing, $joined)
+                ? ($existing === '' ? $joined : $existing)
+                : ($existing.' | '.$joined);
+        } else {
+            unset($snake['ghi_chu_hanh_chinh']);
+        }
+
+        return [
+            'snake' => $snake,
+            'notes' => $notes,
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $data  camelCase import row
      * @return array{

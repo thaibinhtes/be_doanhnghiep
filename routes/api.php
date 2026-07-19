@@ -154,6 +154,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/doanh-nghiep/export-template-dinh-danh', [DoanhNghiepController::class, 'exportIdentityTemplate']);
     Route::get('/doanh-nghiep/import-column-map', [DoanhNghiepController::class, 'importColumnMap']);
     Route::get('/doanh-nghiep/import-dinh-danh-column-map', [DoanhNghiepController::class, 'importDinhDanhColumnMap']);
+    Route::get('/doanh-nghiep/import-field-update-column-map', [DoanhNghiepController::class, 'importFieldUpdateColumnMap']);
     Route::get('/doanh-nghiep/import-configs', [DoanhNghiepImportConfigController::class, 'index']);
     Route::middleware('permission:feature.import-mapping.manage')->group(function () {
         Route::get('/doanh-nghiep/import-configs/admin', [DoanhNghiepImportConfigController::class, 'indexAdmin']);
@@ -170,6 +171,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/doanh-nghiep/import-jobs/{importJob}', [DoanhNghiepImportJobController::class, 'show']);
     Route::get('/doanh-nghiep/import-jobs/{importJob}/rows', [DoanhNghiepImportJobController::class, 'rows']);
     Route::post('/doanh-nghiep/import-dinh-danh', [DoanhNghiepController::class, 'importDinhDanh']);
+    Route::post('/doanh-nghiep/import-field-updates', [DoanhNghiepController::class, 'importFieldUpdates']);
     Route::patch('/doanh-nghiep/dinh-danh/bulk', [DoanhNghiepController::class, 'bulkUpdateDinhDanh']);
     Route::delete('/doanh-nghiep/bulk', [DoanhNghiepController::class, 'bulkDestroy']);
     Route::get('/doanh-nghiep/clear-by-don-vi/preview', [DoanhNghiepController::class, 'clearByDonViPreview']);
