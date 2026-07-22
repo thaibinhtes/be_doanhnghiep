@@ -348,6 +348,55 @@ class HanhChinhMappingController extends ApiController
         );
     }
 
+    public function previewCompanyRawGroups(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'field' => [
+                'required',
+                'string',
+                'in:tinhThanhCu,tinhThanhMoi,quanHuyenCu,quanHuyenMoi,phuongXaCu,phuongXaMoi',
+            ],
+        ]);
+
+        try {
+            $result = $this->companyTextSyncService->previewRawGroups(
+                $payload['field'],
+                $request->user(),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return $this->success($result, 'Xem trước group-by dữ liệu thô thành công');
+    }
+
+    public function commitCompanyRawGroups(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'field' => [
+                'required',
+                'string',
+                'in:tinhThanhCu,tinhThanhMoi,quanHuyenCu,quanHuyenMoi,phuongXaCu,phuongXaMoi',
+            ],
+            'names' => ['nullable', 'array'],
+            'names.*' => ['string', 'max:255'],
+            'linkCompanies' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            $result = $this->companyTextSyncService->commitRawGroups(
+                $payload['field'],
+                $payload['names'] ?? null,
+                (bool) ($payload['linkCompanies'] ?? true),
+                $request->user(),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return $this->success($result, 'Lưu danh mục từ dữ liệu thô thành công');
+    }
+
     public function unmappedCompanies(): JsonResponse
     {
         $result = $this->syncService->syncCompanies(true, request()->user());

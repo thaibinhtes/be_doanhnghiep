@@ -41,10 +41,7 @@ class DoanhNghiepFieldUpdateImport implements OnEachRow, WithChunkReading, WithC
 
     public function onRow(Row $row): void
     {
-        $parsed = DoanhNghiepFieldUpdateImportColumnMap::parseRow(
-            $row->toArray(null, false, false, $this->endColumn()),
-            $this->columnMap,
-        );
+        $parsed = DoanhNghiepFieldUpdateImportColumnMap::parseExcelRow($row, $this->columnMap);
 
         $this->processor->processRow($parsed, $row->getIndex());
     }

@@ -13,17 +13,16 @@ class DoanhNghiepDinhDanhTemplateExport implements FromArray, WithHeadings, Shou
     public function array(): array
     {
         return [
-            ['1600000001', 'Công ty TNHH Demo An Giang', 1],
-            ['1600000002', 'Công ty Cổ phần Demo Châu Đốc', 0],
+            ['1600000001', '21/07/2026 08:30'],
+            ['1600000002', ''],
         ];
     }
 
     public function headings(): array
     {
         return [
-            'mã số doanh nghiệp',
-            'tên doanh nghiệp',
-            'định danh (1/0)',
+            'mã số doanh nghiệp (đối chiếu)',
+            'thời gian định danh (trống = hiện tại)',
         ];
     }
 

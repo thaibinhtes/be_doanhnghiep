@@ -61,6 +61,7 @@ class HopTacXaExcelColumns
         'hoatDong' => 'hoat_dong',
         'dsThanhVien' => 'ds_thanh_vien',
         'ghiChu' => 'ghi_chu',
+        'daCapNhatDinhDanh' => 'da_cap_nhat_dinh_danh',
     ];
 
     public static function headings(): array

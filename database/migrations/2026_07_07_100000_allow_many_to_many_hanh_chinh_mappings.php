@@ -15,12 +15,26 @@ return new class extends Migration
             return;
         }
 
+        // MySQL: unique on xa_phuong_cu_code is also used by the FK, so drop FK first.
+        Schema::table('hanh_chinh_mappings', function (Blueprint $table) {
+            $table->dropForeign(['xa_phuong_cu_code']);
+        });
+
         Schema::table('hanh_chinh_mappings', function (Blueprint $table) {
             $table->dropUnique(['xa_phuong_cu_code']);
             $table->unique(
                 ['xa_phuong_cu_code', 'xa_phuong_moi_code'],
                 'hanh_chinh_mappings_cu_moi_unique',
             );
+            // Keep a non-unique index so the FK can be re-created.
+            $table->index('xa_phuong_cu_code', 'hanh_chinh_mappings_xa_phuong_cu_code_index');
+        });
+
+        Schema::table('hanh_chinh_mappings', function (Blueprint $table) {
+            $table->foreign('xa_phuong_cu_code')
+                ->references('code')
+                ->on('xa_phuong_cu')
+                ->cascadeOnDelete();
         });
     }
 
@@ -33,8 +47,20 @@ return new class extends Migration
         }
 
         Schema::table('hanh_chinh_mappings', function (Blueprint $table) {
+            $table->dropForeign(['xa_phuong_cu_code']);
+        });
+
+        Schema::table('hanh_chinh_mappings', function (Blueprint $table) {
             $table->dropUnique('hanh_chinh_mappings_cu_moi_unique');
+            $table->dropIndex('hanh_chinh_mappings_xa_phuong_cu_code_index');
             $table->unique('xa_phuong_cu_code');
+        });
+
+        Schema::table('hanh_chinh_mappings', function (Blueprint $table) {
+            $table->foreign('xa_phuong_cu_code')
+                ->references('code')
+                ->on('xa_phuong_cu')
+                ->cascadeOnDelete();
         });
     }
 

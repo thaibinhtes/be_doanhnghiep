@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('nav_menu_items', function (Blueprint $table) {
             $table->id();
+            $table->string('item_key', 120)->nullable()->unique();
             $table->foreignId('parent_id')->nullable()->constrained('nav_menu_items')->nullOnDelete();
             $table->string('label');
             $table->string('path')->nullable();

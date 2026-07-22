@@ -100,6 +100,15 @@ class DoanhNghiepFieldUpdateImportColumnMap
     }
 
     /**
+     * @param  array<string, list<string>>  $columnMap
+     * @return array<string, mixed>
+     */
+    public static function parseExcelRow(\Maatwebsite\Excel\Row $row, array $columnMap): array
+    {
+        return DoanhNghiepImportColumnMap::parseExcelRow($row, $columnMap);
+    }
+
+    /**
      * @param  array<int, mixed>  $row
      * @param  array<string, list<string>>  $columnMap
      * @return array<string, mixed>

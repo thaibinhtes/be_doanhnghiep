@@ -281,6 +281,191 @@ class DoanhNghiepHanhChinhSyncService
         return $result;
     }
 
+    /**
+     * Group-by text thô trên doanh nghiệp → preview trước khi lưu vào bảng danh mục (loai cu|moi).
+     *
+     * @return array{
+     *   field: string,
+     *   label: string,
+     *   catalog: string,
+     *   loai: string,
+     *   totalGroups: int,
+     *   newGroups: int,
+     *   existingGroups: int,
+     *   totalCompanies: int,
+     *   groups: array<int, array{ten: string, count: int, existsInCatalog: bool, existingId: int|null}>
+     * }
+     */
+    public function previewRawGroups(string $field, ?User $user = null): array
+    {
+        $config = self::FIELD_CONFIG[$field] ?? null;
+        if ($config === null) {
+            throw new \InvalidArgumentException('Field hành chính không được hỗ trợ.');
+        }
+
+        $textCol = $config['text'];
+        $rows = DoanhNghiepScopeHelper::query($user)
+            ->whereNotNull($textCol)
+            ->where($textCol, '!=', '')
+            ->select($textCol)
+            ->selectRaw('COUNT(*) as company_count')
+            ->groupBy($textCol)
+            ->orderByDesc('company_count')
+            ->get();
+
+        $merged = [];
+        foreach ($rows as $row) {
+            $ten = HanhChinhCodeGenerator::normalizeName((string) $row->{$textCol});
+            if ($ten === '') {
+                continue;
+            }
+            $key = mb_strtolower($ten);
+            if (! isset($merged[$key])) {
+                $merged[$key] = ['ten' => $ten, 'count' => 0];
+            }
+            $merged[$key]['count'] += (int) $row->company_count;
+        }
+
+        $catalogByName = $this->catalogNameIndex($config['cap'], $config['loai']);
+
+        $groups = [];
+        $newGroups = 0;
+        $existingGroups = 0;
+        $totalCompanies = 0;
+
+        foreach ($merged as $item) {
+            $lookup = mb_strtolower($item['ten']);
+            $existingId = $catalogByName[$lookup] ?? null;
+            $exists = $existingId !== null;
+            if ($exists) {
+                $existingGroups++;
+            } else {
+                $newGroups++;
+            }
+            $totalCompanies += $item['count'];
+            $groups[] = [
+                'ten' => $item['ten'],
+                'count' => $item['count'],
+                'existsInCatalog' => $exists,
+                'existingId' => $existingId,
+            ];
+        }
+
+        usort($groups, fn (array $a, array $b) => $b['count'] <=> $a['count']);
+
+        $catalogLabels = [
+            'tinh' => 'Bảng tỉnh',
+            'quan_huyen' => 'Bảng quận huyện',
+            'phuong_xa' => 'Bảng phường xã',
+        ];
+
+        return [
+            'field' => $field,
+            'label' => $config['label'],
+            'catalog' => $catalogLabels[$config['cap']],
+            'loai' => $config['loai'],
+            'totalGroups' => count($groups),
+            'newGroups' => $newGroups,
+            'existingGroups' => $existingGroups,
+            'totalCompanies' => $totalCompanies,
+            'groups' => $groups,
+        ];
+    }
+
+    /**
+     * Lưu các giá trị text (group-by) đã chọn vào bảng danh mục tương ứng, rồi liên kết DN.
+     *
+     * @param  array<int, string>|null  $names  null = tất cả tên chưa có trong danh mục
+     * @return array<string, mixed>
+     */
+    public function commitRawGroups(
+        string $field,
+        ?array $names = null,
+        bool $linkCompanies = true,
+        ?User $user = null,
+    ): array {
+        $config = self::FIELD_CONFIG[$field] ?? null;
+        if ($config === null) {
+            throw new \InvalidArgumentException('Field hành chính không được hỗ trợ.');
+        }
+
+        $preview = $this->previewRawGroups($field, $user);
+        $selectedLookup = null;
+        if ($names !== null) {
+            $selectedLookup = [];
+            foreach ($names as $name) {
+                $normalized = HanhChinhCodeGenerator::normalizeName((string) $name);
+                if ($normalized !== '') {
+                    $selectedLookup[mb_strtolower($normalized)] = $normalized;
+                }
+            }
+        }
+
+        $this->loadCatalogs();
+        $created = 0;
+        $skippedExisting = 0;
+        $resolveResult = ['createdTinh' => 0, 'createdQuanHuyen' => 0, 'createdPhuongXa' => 0];
+
+        foreach ($preview['groups'] as $group) {
+            $key = mb_strtolower($group['ten']);
+            if ($selectedLookup !== null && ! isset($selectedLookup[$key])) {
+                continue;
+            }
+
+            if ($group['existsInCatalog']) {
+                $skippedExisting++;
+
+                continue;
+            }
+
+            match ($config['cap']) {
+                'tinh' => $this->resolveTinh($group['ten'], $config['loai'], false, $resolveResult),
+                'quan_huyen' => $this->resolveQuanHuyen($group['ten'], $config['loai'], null, false, $resolveResult),
+                default => $this->resolvePhuongXa($group['ten'], $config['loai'], null, false, $resolveResult),
+            };
+            $created++;
+        }
+
+        $linkResult = null;
+        if ($linkCompanies) {
+            $linkResult = $this->syncField($field, false, $user);
+        }
+
+        return [
+            'field' => $field,
+            'label' => $config['label'],
+            'catalog' => $config['cap'],
+            'loai' => $config['loai'],
+            'created' => $created,
+            'skippedExisting' => $skippedExisting,
+            'createdTinh' => $resolveResult['createdTinh'],
+            'createdQuanHuyen' => $resolveResult['createdQuanHuyen'],
+            'createdPhuongXa' => $resolveResult['createdPhuongXa'],
+            'link' => $linkResult,
+        ];
+    }
+
+    /**
+     * @return array<string, int> lowercase ten → id
+     */
+    private function catalogNameIndex(string $cap, string $loai): array
+    {
+        $index = [];
+
+        $items = match ($cap) {
+            'tinh' => HanhChinhTinh::query()->where('loai', $loai)->get(['id', 'ten']),
+            'quan_huyen' => HanhChinhQuanHuyen::query()->where('loai', $loai)->get(['id', 'ten']),
+            default => HanhChinhPhuongXa::query()->where('loai', $loai)->get(['id', 'ten']),
+        };
+
+        foreach ($items as $item) {
+            $key = mb_strtolower(HanhChinhCodeGenerator::normalizeName((string) $item->ten));
+            $index[$key] ??= $item->id;
+        }
+
+        return $index;
+    }
+
     private function loadCatalogs(): void
     {
         foreach (HanhChinhTinh::query()->orderBy('id')->get(['id', 'ten', 'loai']) as $item) {

@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\HopTacXa;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -14,20 +13,26 @@ class BaoCaoTongHopHtxService
     public function build(?User $user = null): array
     {
         $grouped = HopTacXaScopeHelper::query($user)
-            ->get(['hoat_dong'])
-            ->groupBy(function (HopTacXa $item) {
-                $label = trim((string) ($item->hoat_dong ?? ''));
+            ->toBase()
+            ->selectRaw(
+                "CASE
+                    WHEN NULLIF(TRIM(COALESCE(hoat_dong, '')), '') IS NULL THEN 'Chưa xác định'
+                    ELSE TRIM(hoat_dong)
+                END as ten",
+            )
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('ten')
+            ->orderByDesc('total')
+            ->get()
+            ->map(function ($row) {
+                $label = (string) $row->ten;
 
-                return $label !== '' ? $label : 'Chưa xác định';
-            })
-            ->map(function ($items, string $label) {
                 return [
                     'ma' => Str::slug($label, '_'),
                     'ten' => $label,
-                    'count' => $items->count(),
+                    'count' => (int) $row->total,
                 ];
             })
-            ->sortByDesc('count')
             ->values()
             ->all();
 

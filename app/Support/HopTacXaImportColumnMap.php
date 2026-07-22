@@ -195,6 +195,37 @@ class HopTacXaImportColumnMap
     }
 
     /**
+     * @param  array<string, list<string>>  $columnMap
+     * @return array<string, mixed>
+     */
+    public static function parseExcelRow(\Maatwebsite\Excel\Row $row, array $columnMap): array
+    {
+        $result = [];
+
+        foreach ($columnMap as $key => $columns) {
+            if ($columns === []) {
+                continue;
+            }
+
+            $rawValue = ExcelLetterCellReader::firstNonEmpty($row, $columns);
+
+            if ($rawValue === null) {
+                continue;
+            }
+
+            $value = HopTacXaExcelColumns::normalizeImportValue($key, $rawValue);
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $result[$key] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
      * @param  array<int, mixed>  $row
      * @param  array<string, list<string>>  $columnMap
      * @return array<string, mixed>
@@ -246,19 +277,50 @@ class HopTacXaImportColumnMap
     }
 
     /**
-     * @param  array<int, mixed>  $row
+     * Cột Excel cao nhất trong ánh xạ (theo chỉ số — tránh so sánh chuỗi Z > AA).
+     *
+     * @param  array<string, list<string>>  $columnMap
+     */
+    public static function resolveEndColumn(array $columnMap, string $fallback = self::IMPORT_END_COLUMN): string
+    {
+        $maxIndex = -1;
+
+        foreach ($columnMap as $columns) {
+            foreach ($columns as $column) {
+                $index = self::columnLetterToIndex((string) $column);
+                if ($index > $maxIndex) {
+                    $maxIndex = $index;
+                }
+            }
+        }
+
+        if ($maxIndex < 0) {
+            return $fallback;
+        }
+
+        return self::columnIndexToLetter($maxIndex);
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $row
      * @param  list<string>  $columns
      */
     private static function readColumns(array $row, array $columns): ?string
     {
-        foreach ($columns as $column) {
+        $ordered = $columns;
+        usort(
+            $ordered,
+            static fn (string $left, string $right): int => self::columnLetterToIndex($left) <=> self::columnLetterToIndex($right),
+        );
+
+        foreach ($ordered as $column) {
             $index = self::columnLetterToIndex($column);
 
             if ($index < 0) {
                 continue;
             }
 
-            $value = $row[$index] ?? null;
+            $value = $row[$index] ?? $row[$column] ?? $row[strtolower($column)] ?? null;
 
             if ($value === null || $value === '') {
                 continue;

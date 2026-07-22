@@ -35,6 +35,7 @@ class HopTacXa extends Model
         'ds_thanh_vien',
         'dia_chi_moi',
         'ghi_chu',
+        'da_cap_nhat_dinh_danh',
         'don_vi_id',
         'created_by_user_id',
     ];
@@ -46,6 +47,7 @@ class HopTacXa extends Model
             'so_thanh_vien' => 'integer',
             'so_nguoi_lao_dong' => 'integer',
             'dien_tich_ha' => 'float',
+            'da_cap_nhat_dinh_danh' => 'boolean',
         ];
     }
 
@@ -62,5 +64,12 @@ class HopTacXa extends Model
     public function taxManagement(): HasOne
     {
         return $this->hasOne(CooperativeTaxManagement::class, 'hop_tac_xa_id');
+    }
+
+    public function dinhDanh(): HasOne
+    {
+        return $this->hasOne(ToChucDinhDanh::class, 'hop_tac_xa_id')
+            ->where('loai_to_chuc', ToChucDinhDanh::LOAI_HOP_TAC_XA)
+            ->where('da_dinh_danh', true);
     }
 }

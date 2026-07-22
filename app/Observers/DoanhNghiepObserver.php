@@ -5,29 +5,31 @@ namespace App\Observers;
 use App\Models\DnDinhDanhLichSu;
 use App\Models\DoanhNghiep;
 use App\Support\DinhDanhHistoryContext;
+use App\Support\ToChucDinhDanhSync;
 
 class DoanhNghiepObserver
 {
     public function created(DoanhNghiep $doanhNghiep): void
     {
-        if (!$doanhNghiep->da_cap_nhat_dinh_danh) {
+        if (! $doanhNghiep->da_cap_nhat_dinh_danh) {
             return;
         }
 
         $this->record($doanhNghiep, false, true);
+        ToChucDinhDanhSync::syncDoanhNghiep($doanhNghiep, true);
     }
 
     public function updated(DoanhNghiep $doanhNghiep): void
     {
-        if (!$doanhNghiep->wasChanged('da_cap_nhat_dinh_danh')) {
+        if (! $doanhNghiep->wasChanged('da_cap_nhat_dinh_danh')) {
             return;
         }
 
-        $this->record(
-            $doanhNghiep,
-            (bool) $doanhNghiep->getOriginal('da_cap_nhat_dinh_danh'),
-            (bool) $doanhNghiep->da_cap_nhat_dinh_danh,
-        );
+        $oldValue = (bool) $doanhNghiep->getOriginal('da_cap_nhat_dinh_danh');
+        $newValue = (bool) $doanhNghiep->da_cap_nhat_dinh_danh;
+
+        $this->record($doanhNghiep, $oldValue, $newValue);
+        ToChucDinhDanhSync::syncDoanhNghiep($doanhNghiep, $newValue);
     }
 
     private function record(DoanhNghiep $doanhNghiep, bool $oldValue, bool $newValue): void
@@ -46,6 +48,27 @@ class DoanhNghiepObserver
             'gia_tri_moi' => $newValue,
             'nguon' => (string) DinhDanhHistoryContext::get('nguon', 'he_thong'),
             'ghi_chu' => DinhDanhHistoryContext::get('ghi_chu'),
+            'created_at' => $this->resolveOccurredAt(),
+            'updated_at' => $this->resolveOccurredAt(),
         ]);
+    }
+
+    private function resolveOccurredAt(): \Carbon\Carbon
+    {
+        $thoiDiem = DinhDanhHistoryContext::get('thoi_diem');
+
+        if ($thoiDiem instanceof \Carbon\Carbon) {
+            return $thoiDiem->copy();
+        }
+
+        if (is_string($thoiDiem) && trim($thoiDiem) !== '') {
+            try {
+                return \Carbon\Carbon::parse($thoiDiem);
+            } catch (\Throwable) {
+                // fall through
+            }
+        }
+
+        return now();
     }
 }

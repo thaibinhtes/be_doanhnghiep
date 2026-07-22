@@ -2,10 +2,10 @@
 
 namespace App\Support;
 
-use App\Models\DoanhNghiep;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class BaoCaoTienDoDinhDanhService
@@ -48,13 +48,9 @@ class BaoCaoTienDoDinhDanhService
             ],
         ];
 
-        $companies = DoanhNghiepScopeHelper::query($user)
-            ->with('dnTrangThai')
-            ->get();
-
         $rowDefinitions = [
-            ['key' => 'doanh_nghiep', 'label' => 'Đối với doanh nghiệp', 'filter' => fn (DoanhNghiep $dn) => !$this->isHtx($dn)],
-            ['key' => 'htx', 'label' => 'Đối với HTX/LH HTX', 'filter' => fn (DoanhNghiep $dn) => $this->isHtx($dn)],
+            ['key' => 'doanh_nghiep', 'label' => 'Đối với doanh nghiệp', 'entity' => 'doanh_nghiep'],
+            ['key' => 'htx', 'label' => 'Đối với HTX/LH HTX', 'entity' => 'htx'],
         ];
 
         $rows = [];
@@ -69,7 +65,8 @@ class BaoCaoTienDoDinhDanhService
 
             foreach ($ranges as $range) {
                 $metrics = $this->buildMetrics(
-                    $companies->filter($definition['filter']),
+                    $user,
+                    $definition['entity'],
                     $range['from'] ? Carbon::parse($range['from'])->startOfDay() : null,
                     $range['to'] ? Carbon::parse($range['to'])->endOfDay() : null,
                 );
@@ -113,91 +110,113 @@ class BaoCaoTienDoDinhDanhService
     }
 
     /**
-     * @param  Collection<int, DoanhNghiep>  $companies
+     * @param  'doanh_nghiep'|'htx'  $entity
      * @return array<string, int>
      */
-    private function buildMetrics(Collection $companies, ?Carbon $from, ?Carbon $to): array
+    private function buildMetrics(?User $user, string $entity, ?Carbon $from, ?Carbon $to): array
     {
-        $inRange = $companies->filter(function (DoanhNghiep $company) use ($from, $to) {
-            return $this->isInDateRange($company->ngay_cap, $from, $to);
-        });
+        $query = DoanhNghiepScopeHelper::query($user)
+            ->leftJoin('dn_trang_thais', 'dn_trang_thais.id', '=', 'doanh_nghieps.dn_trang_thai_id');
 
-        $soLuongCapGcn = $inRange->count();
-        $donViGiaiThe = $inRange->filter(fn (DoanhNghiep $company) => $this->isDissolved($company))->count();
-        $active = $inRange->reject(fn (DoanhNghiep $company) => $this->isDissolved($company));
-        $canDinhDanh = $active->count();
-        $daDinhDanh = $active->filter(fn (DoanhNghiep $company) => (bool) $company->da_cap_nhat_dinh_danh)->count();
-        $chuaDinhDanh = max(0, $canDinhDanh - $daDinhDanh);
+        $this->applyEntityFilter($query, $entity);
+        $this->applyNgayCapRange($query, $from, $to);
+
+        $dissolvedList = implode(',', array_map(
+            fn (string $ma) => "'".str_replace("'", "''", $ma)."'",
+            self::DISSOLVED_STATUS_MAS,
+        ));
+
+        $row = $query
+            ->toBase()
+            ->selectRaw('COUNT(doanh_nghieps.id) as so_luong_cap_gcn')
+            ->selectRaw(
+                "COUNT(CASE WHEN dn_trang_thais.ma IN ({$dissolvedList}) THEN 1 END) as don_vi_giai_the",
+            )
+            ->selectRaw(
+                "COUNT(CASE WHEN dn_trang_thais.ma IS NULL OR dn_trang_thais.ma NOT IN ({$dissolvedList}) THEN 1 END) as can_dinh_danh",
+            )
+            ->selectRaw(
+                "COUNT(CASE WHEN (dn_trang_thais.ma IS NULL OR dn_trang_thais.ma NOT IN ({$dissolvedList})) AND doanh_nghieps.da_cap_nhat_dinh_danh = 1 THEN 1 END) as da_dinh_danh",
+            )
+            ->first();
+
+        $soLuongCapGcn = (int) ($row->so_luong_cap_gcn ?? 0);
+        $donViGiaiThe = (int) ($row->don_vi_giai_the ?? 0);
+        $canDinhDanh = (int) ($row->can_dinh_danh ?? 0);
+        $daDinhDanh = (int) ($row->da_dinh_danh ?? 0);
 
         return [
             'soLuongCapGcn' => $soLuongCapGcn,
             'donViGiaiThe' => $donViGiaiThe,
             'canDinhDanh' => $canDinhDanh,
             'daDinhDanh' => $daDinhDanh,
-            'chuaDinhDanh' => $chuaDinhDanh,
+            'chuaDinhDanh' => max(0, $canDinhDanh - $daDinhDanh),
         ];
     }
 
-    private function isHtx(DoanhNghiep $company): bool
+    /**
+     * @param  Builder<\App\Models\DoanhNghiep>  $query
+     * @param  'doanh_nghiep'|'htx'  $entity
+     */
+    private function applyEntityFilter(Builder $query, string $entity): void
     {
-        $loaiHinh = mb_strtolower(trim((string) $company->loai_hinh_dn));
+        $htxSql = "(
+            LOWER(TRIM(COALESCE(doanh_nghieps.loai_hinh_dn, ''))) LIKE '%htx%'
+            OR LOWER(TRIM(COALESCE(doanh_nghieps.loai_hinh_dn, ''))) LIKE '%hợp tác xã%'
+            OR LOWER(TRIM(COALESCE(doanh_nghieps.loai_hinh_dn, ''))) LIKE '%liên hiệp%'
+        )";
 
-        if ($loaiHinh === '') {
-            return false;
+        if ($entity === 'htx') {
+            $query->whereRaw($htxSql);
+
+            return;
         }
 
-        return str_contains($loaiHinh, 'htx')
-            || str_contains($loaiHinh, 'hợp tác xã')
-            || str_contains($loaiHinh, 'liên hiệp');
+        $query->whereRaw("NOT {$htxSql}");
     }
 
-    private function isDissolved(DoanhNghiep $company): bool
+    /**
+     * @param  Builder<\App\Models\DoanhNghiep>  $query
+     */
+    private function applyNgayCapRange(Builder $query, ?Carbon $from, ?Carbon $to): void
     {
-        $ma = $company->dnTrangThai?->ma;
+        $parsedDateSql = $this->ngayCapParsedSql();
 
-        return $ma !== null && in_array($ma, self::DISSOLVED_STATUS_MAS, true);
+        $query->whereRaw("{$parsedDateSql} IS NOT NULL");
+
+        if ($from !== null) {
+            $query->whereRaw("{$parsedDateSql} >= ?", [$from->toDateString()]);
+        }
+
+        if ($to !== null) {
+            $query->whereRaw("{$parsedDateSql} <= ?", [$to->toDateString()]);
+        }
     }
 
-    private function isInDateRange(?string $ngayCap, ?Carbon $from, ?Carbon $to): bool
+    private function ngayCapParsedSql(): string
     {
-        $date = $this->parseNgayCap($ngayCap);
+        $driver = DB::connection()->getDriverName();
+        $column = 'TRIM(doanh_nghieps.ngay_cap)';
 
-        if (!$date) {
-            return false;
+        if ($driver === 'sqlite') {
+            return "COALESCE(
+                date({$column}),
+                date({$column}, 'start of day'),
+                CASE
+                    WHEN {$column} GLOB '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]'
+                        THEN date(substr({$column}, 7, 4) || '-' || substr({$column}, 4, 2) || '-' || substr({$column}, 1, 2))
+                    WHEN {$column} GLOB '[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]'
+                        THEN date(substr({$column}, 7, 4) || '-' || substr({$column}, 4, 2) || '-' || substr({$column}, 1, 2))
+                    ELSE NULL
+                END
+            )";
         }
 
-        if ($from && $date->lt($from)) {
-            return false;
-        }
-
-        if ($to && $date->gt($to)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    private function parseNgayCap(?string $value): ?Carbon
-    {
-        if (!$value || trim($value) === '') {
-            return null;
-        }
-
-        $value = trim($value);
-
-        foreach (['d/m/Y', 'd-m-Y', 'Y-m-d'] as $format) {
-            try {
-                return Carbon::createFromFormat($format, $value)->startOfDay();
-            } catch (\Throwable) {
-                // try next format
-            }
-        }
-
-        try {
-            return Carbon::parse($value)->startOfDay();
-        } catch (\Throwable) {
-            return null;
-        }
+        return "COALESCE(
+            STR_TO_DATE({$column}, '%Y-%m-%d'),
+            STR_TO_DATE({$column}, '%d/%m/%Y'),
+            STR_TO_DATE({$column}, '%d-%m-%Y')
+        )";
     }
 
     private function parseDate(?string $value): ?Carbon

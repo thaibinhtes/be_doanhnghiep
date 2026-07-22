@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DonVi extends Model
 {
+    public const ROOT_MA = 'ROOT';
+
+    public const ROOT_TEN = 'Sở Tài Chính';
+
+    public const ROOT_MO_TA = 'Đơn vị gốc hệ thống — Sở Tài Chính';
+
     protected $table = 'don_vis';
 
     protected $fillable = [
@@ -102,10 +108,31 @@ class DonVi extends Model
 
     private static ?int $rootIdCache = null;
 
+    /**
+     * Đảm bảo đơn vị gốc Sở Tài Chính tồn tại (ma = ROOT).
+     */
+    public static function ensureRoot(): self
+    {
+        $root = self::query()->updateOrCreate(
+            ['parent_id' => null, 'ma' => self::ROOT_MA],
+            [
+                'cap' => 1,
+                'ten' => self::ROOT_TEN,
+                'mo_ta' => self::ROOT_MO_TA,
+                'thu_tu' => 0,
+                'is_active' => true,
+            ]
+        );
+
+        self::$rootIdCache = $root->id;
+
+        return $root;
+    }
+
     public static function rootId(): ?int
     {
         if (self::$rootIdCache === null) {
-            self::$rootIdCache = self::query()->where('ma', 'ROOT')->value('id');
+            self::$rootIdCache = self::query()->where('ma', self::ROOT_MA)->value('id');
         }
 
         return self::$rootIdCache;

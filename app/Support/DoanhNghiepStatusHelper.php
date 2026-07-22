@@ -66,20 +66,21 @@ class DoanhNghiepStatusHelper
         return $data;
     }
 
+    /**
+     * Chỉ cập nhật cờ định danh — không đụng dn_trang_thai_id / trang_thai
+     * (trạng thái hoạt động / báo cáo trên DN; định danh lưu ở to_chuc_dinh_danhs).
+     */
     public static function syncDinhDanhStatus(DoanhNghiep $doanhNghiep, bool $daCapNhatDinhDanh): void
     {
-        $ma = $daCapNhatDinhDanh ? 'da_dinh_danh' : 'chua_dinh_danh';
-        $status = DnTrangThai::query()->where('ma', $ma)->first();
+        if ((bool) $doanhNghiep->da_cap_nhat_dinh_danh === $daCapNhatDinhDanh) {
+            // Vẫn sync bảng định danh (thời gian / upsert) khi import lại.
+            ToChucDinhDanhSync::syncDoanhNghiep($doanhNghiep, $daCapNhatDinhDanh);
 
-        if ($status) {
-            $doanhNghiep->update([
-                'dn_trang_thai_id' => $status->id,
-                'da_cap_nhat_dinh_danh' => $daCapNhatDinhDanh,
-                'trang_thai' => $status->ten,
-                'ly_do_trang_thai' => null,
-            ]);
-        } else {
-            $doanhNghiep->update(['da_cap_nhat_dinh_danh' => $daCapNhatDinhDanh]);
+            return;
         }
+
+        $doanhNghiep->update([
+            'da_cap_nhat_dinh_danh' => $daCapNhatDinhDanh,
+        ]);
     }
 }

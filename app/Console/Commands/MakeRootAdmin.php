@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\DonVi;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -17,7 +18,7 @@ class MakeRootAdmin extends Command
                             {--reset-password : Đặt lại mật khẩu cho tài khoản đã tồn tại}
                             {--name=Administrator : Tên hiển thị khi tạo mới}';
 
-    protected $description = 'Gán vai trò ROOT cho user (mặc định admin@htqldn.local)';
+    protected $description = 'Gán vai trò ROOT cho user (mặc định admin@htqldn.local), đơn vị Sở Tài Chính';
 
     public function handle(): int
     {
@@ -38,6 +39,8 @@ class MakeRootAdmin extends Command
         );
         $rootRole->permissions()->sync(Permission::pluck('id'));
 
+        $rootDonVi = DonVi::ensureRoot();
+
         $email = strtolower(trim((string) $this->argument('email')));
         $user = User::query()->where('email', $email)->first();
         $created = false;
@@ -48,12 +51,14 @@ class MakeRootAdmin extends Command
                 'email' => $email,
                 'password' => (string) $this->option('password'),
                 'role_id' => $rootRole->id,
+                'don_vi_id' => $rootDonVi->id,
                 'is_active' => true,
             ]);
             $created = true;
         } else {
             $updates = [
                 'role_id' => $rootRole->id,
+                'don_vi_id' => $user->don_vi_id ?? $rootDonVi->id,
                 'is_active' => true,
             ];
 
@@ -65,10 +70,12 @@ class MakeRootAdmin extends Command
         }
 
         $this->info(sprintf(
-            '%s %s — vai trò ROOT (role_id=%d, permissions=%d)',
+            '%s %s — vai trò ROOT, đơn vị %s (role_id=%d, don_vi_id=%d, permissions=%d)',
             $created ? 'Đã tạo' : 'Đã cập nhật',
             $email,
+            DonVi::ROOT_TEN,
             $rootRole->id,
+            $user->don_vi_id,
             $rootRole->permissions()->count(),
         ));
 

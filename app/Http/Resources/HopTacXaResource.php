@@ -40,6 +40,12 @@ class HopTacXaResource extends JsonResource
             'hoatDong' => $this->hoat_dong,
             'dsThanhVien' => $this->ds_thanh_vien,
             'ghiChu' => $this->ghi_chu,
+            'daCapNhatDinhDanh' => (bool) $this->da_cap_nhat_dinh_danh,
+            'trangThaiDinhDanh' => $this->da_cap_nhat_dinh_danh ? 'Đã cập nhật định danh' : 'Chưa cập nhật định danh',
+            'thoiGianDinhDanh' => $this->when(
+                $this->relationLoaded('dinhDanh'),
+                fn () => $this->dinhDanh?->thoi_gian_dinh_danh?->toIso8601String(),
+            ),
             'donViId' => $this->don_vi_id,
             'donViTen' => $this->when(
                 $this->relationLoaded('donVi'),

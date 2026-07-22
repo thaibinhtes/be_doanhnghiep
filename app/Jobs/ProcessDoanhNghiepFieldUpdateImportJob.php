@@ -11,6 +11,7 @@ use App\Support\ImportSocketTopics;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -22,22 +23,32 @@ class ProcessDoanhNghiepFieldUpdateImportJob implements ShouldBeUnique, ShouldQu
 
     public int $tries = 1;
 
+    public int $uniqueFor = 7200;
+
     public function __construct(
         public readonly int $importJobId,
-    ) {}
+    ) {
+        $this->onQueue('doanh-nghiep');
+    }
 
     public function uniqueId(): string
     {
-        return 'doanh-nghiep-field-update-import-'.$this->importJobId;
+        return 'doanh-nghiep-field-update-import-' . $this->importJobId;
     }
 
     public function handle(): void
     {
+        @ini_set('memory_limit', '512M');
+
         $importJob = DoanhNghiepImportJob::query()->find($this->importJobId);
-        if (!$importJob || !in_array($importJob->status, [
-            DoanhNghiepImportJob::STATUS_PENDING,
-            DoanhNghiepImportJob::STATUS_PROCESSING,
+        if (!$importJob || in_array($importJob->status, [
+            DoanhNghiepImportJob::STATUS_COMPLETED,
+            DoanhNghiepImportJob::STATUS_FAILED,
         ], true)) {
+            return;
+        }
+
+        if (!$importJob->tryClaimForProcessing()) {
             return;
         }
 
@@ -48,7 +59,6 @@ class ProcessDoanhNghiepFieldUpdateImportJob implements ShouldBeUnique, ShouldQu
             return;
         }
 
-        $importJob->markProcessing();
         ImportSocketNotifier::notify(
             $user->id,
             ImportSocketTopics::EXCEL_STARTED,
@@ -109,6 +119,12 @@ class ProcessDoanhNghiepFieldUpdateImportJob implements ShouldBeUnique, ShouldQu
 
     private function failJob(DoanhNghiepImportJob $importJob, int $userId, string $message): void
     {
+        $importJob->refresh();
+
+        if ($importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED) {
+            return;
+        }
+
         $importJob->markFailed($message);
         ImportSocketNotifier::notify(
             $userId,
@@ -120,5 +136,26 @@ class ProcessDoanhNghiepFieldUpdateImportJob implements ShouldBeUnique, ShouldQu
                 'entity' => 'doanh-nghiep',
             ],
         );
+    }
+
+    public function failed(?\Throwable $exception): void
+    {
+        $importJob = DoanhNghiepImportJob::query()->find($this->importJobId);
+
+        if (!$importJob) {
+            return;
+        }
+
+        if ($importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED || is_array($importJob->result)) {
+            return;
+        }
+
+        if ($exception instanceof MaxAttemptsExceededException) {
+            return;
+        }
+
+        $message = $exception?->getMessage() ?? 'Import thất bại.';
+
+        $this->failJob($importJob, $importJob->user_id, $message);
     }
 }

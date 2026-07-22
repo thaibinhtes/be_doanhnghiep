@@ -131,6 +131,8 @@ class DoanhNghiepFieldUpdateProcessor
         /** @var DoanhNghiep $company */
         $company = $matches->first();
 
+        $updatePayload = DoanhNghiepNganhNgheHelper::normalizeImportCamelRow($updatePayload);
+
         $validator = Validator::make($updatePayload, $this->validationRules(array_keys($updatePayload)));
         if ($validator->fails()) {
             $this->recordFailure(
@@ -216,7 +218,7 @@ class DoanhNghiepFieldUpdateProcessor
             'nguoiDaiDienTen' => ['string', 'max:255'],
             'ngaySinhNguoiDaiDien' => ['string', 'max:50'],
             'chuSoHuuTen' => ['string', 'max:255'],
-            'nganhNgheKDChinh' => ['string', 'max:20'],
+            'nganhNgheKDChinh' => ['string', 'max:'.DoanhNghiepNganhNgheHelper::CODE_MAX_LENGTH],
             'nganhNgheKD' => ['string'],
             'ngayCap' => ['string', 'max:50'],
             'ngayDangKyThayDoi' => ['string', 'max:50'],

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\DonVi;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -20,6 +21,7 @@ class RolePermissionSeeder extends Seeder
         }
 
         $allPermissionIds = Permission::pluck('id');
+        $rootDonViId = DonVi::ensureRoot()->id;
 
         $rootRole = Role::updateOrCreate(
             ['slug' => 'root'],
@@ -71,6 +73,7 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Administrator',
                 'password' => 'password',
                 'role_id' => $rootRole->id,
+                'don_vi_id' => $rootDonViId,
                 'is_active' => true,
             ]
         );
@@ -81,6 +84,7 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Editor',
                 'password' => 'password',
                 'role_id' => $editorRole->id,
+                'don_vi_id' => $rootDonViId,
                 'is_active' => true,
             ]
         );
@@ -91,6 +95,7 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Viewer',
                 'password' => 'password',
                 'role_id' => $viewerRole->id,
+                'don_vi_id' => $rootDonViId,
                 'is_active' => true,
             ]
         );

@@ -29,7 +29,9 @@ class ProcessCompanyTaxImportJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly int $importJobId,
-    ) {}
+    ) {
+        $this->onQueue('doanh-nghiep');
+    }
 
     public function uniqueId(): string
     {

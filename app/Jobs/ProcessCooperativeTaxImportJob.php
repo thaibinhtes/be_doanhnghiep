@@ -29,11 +29,8 @@ class ProcessCooperativeTaxImportJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly int $importJobId,
-    ) {}
-
-    public function uniqueId(): string
-    {
-        return 'cooperative-tax-import-' . $this->importJobId;
+    ) {
+        $this->onQueue('htx');
     }
 
     public function handle(): void

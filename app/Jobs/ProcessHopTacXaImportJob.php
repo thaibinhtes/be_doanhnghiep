@@ -24,7 +24,9 @@ class ProcessHopTacXaImportJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly int $importJobId,
-    ) {}
+    ) {
+        $this->onQueue('htx');
+    }
 
     public function uniqueId(): string
     {
@@ -33,6 +35,8 @@ class ProcessHopTacXaImportJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        @ini_set('memory_limit', '512M');
+
         $importJob = HopTacXaImportJob::query()->find($this->importJobId);
 
         if (!$importJob || !in_array($importJob->status, [

@@ -74,7 +74,8 @@ class UserScopeHelper
         }
 
         if (RoleHierarchyHelper::isRootUser($actor)) {
-            return $requestedDonViId ?? $actor->don_vi_id;
+            // Mặc định gán Sở Tài Chính (ROOT) khi không chọn đơn vị.
+            return $requestedDonViId ?? $actor->don_vi_id ?? DonVi::rootId();
         }
 
         return $actor->don_vi_id;

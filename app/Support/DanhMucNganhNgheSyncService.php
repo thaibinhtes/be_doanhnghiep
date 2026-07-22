@@ -114,6 +114,8 @@ class DanhMucNganhNgheSyncService
             }
         });
 
+        DoanhNghiepNganhNgheHelper::clearCatalogCache();
+
         return [
             'imported' => $imported,
             'skipped' => $skipped,

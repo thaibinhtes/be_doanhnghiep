@@ -20,6 +20,8 @@ class HopTacXaColumnImport implements OnEachRow, WithChunkReading, WithColumnLim
     /** @var array<string, list<string>> */
     private readonly array $columnMap;
 
+    private readonly string $endColumn;
+
     /**
      * @param  array<string, list<string>>|null  $columnMap
      */
@@ -31,6 +33,7 @@ class HopTacXaColumnImport implements OnEachRow, WithChunkReading, WithColumnLim
     ) {
         $this->processor = new HopTacXaImportProcessor($user, $importJobId);
         $this->columnMap = HopTacXaImportColumnMap::resolve($columnMap);
+        $this->endColumn = HopTacXaImportColumnMap::resolveEndColumn($this->columnMap);
     }
 
     public function onRow(Row $row): void
@@ -45,10 +48,7 @@ class HopTacXaColumnImport implements OnEachRow, WithChunkReading, WithColumnLim
             return;
         }
 
-        $data = HopTacXaImportColumnMap::parseRow(
-            $row->toArray(null, false, false, $this->endColumn()),
-            $this->columnMap,
-        );
+        $data = HopTacXaImportColumnMap::parseExcelRow($row, $this->columnMap);
 
         if (HopTacXaImportColumnMap::isEmptyRow($data)) {
             $this->stopped = true;
@@ -71,7 +71,7 @@ class HopTacXaColumnImport implements OnEachRow, WithChunkReading, WithColumnLim
 
     public function endColumn(): string
     {
-        return HopTacXaImportColumnMap::IMPORT_END_COLUMN;
+        return $this->endColumn;
     }
 
     /**

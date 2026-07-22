@@ -45,6 +45,8 @@ class DoanhNghiepImportProcessor
         }
 
         $data = DoanhNghiepImportExtensionHelper::apply($data, $this->valueExtensions);
+        // Excel thường có "2391: Mô tả..." — trích mã trước khi validate max:20.
+        $data = DoanhNghiepNganhNgheHelper::normalizeImportCamelRow($data);
 
         $tenDoanhNghiep = trim((string) ($data['tenDoanhNghiep'] ?? ''));
         $maSoDoanhNghiep = trim((string) ($data['maSoDoanhNghiep'] ?? ''));
@@ -73,7 +75,7 @@ class DoanhNghiepImportProcessor
             'nguoiDaiDienTen' => ['nullable', 'string', 'max:255'],
             'ngaySinhNguoiDaiDien' => ['nullable', 'string', 'max:50'],
             'chuSoHuuTen' => ['nullable', 'string', 'max:255'],
-            'nganhNgheKDChinh' => ['nullable', 'string', 'max:20'],
+            'nganhNgheKDChinh' => ['nullable', 'string', 'max:'.DoanhNghiepNganhNgheHelper::CODE_MAX_LENGTH],
             'nganhNgheKD' => ['nullable', 'string'],
             'ngayCap' => ['nullable', 'string', 'max:50'],
             'ngayDangKyThayDoi' => ['nullable', 'string', 'max:50'],

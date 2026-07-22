@@ -72,6 +72,26 @@ class DoanhNghiepImportJob extends Model
         ]);
     }
 
+    /** Only one queue worker may claim a pending import (avoids duplicate runs). */
+    public function tryClaimForProcessing(): bool
+    {
+        $updated = static::query()
+            ->whereKey($this->id)
+            ->where('status', self::STATUS_PENDING)
+            ->update([
+                'status' => self::STATUS_PROCESSING,
+                'started_at' => now(),
+            ]);
+
+        if ($updated === 1) {
+            $this->refresh();
+
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * @param  array{imported: int, duplicates?: int, updated?: int, failed: int, errors: array<int, array{row: int, message: string}>}  $result
      */
@@ -85,12 +105,21 @@ class DoanhNghiepImportJob extends Model
         ]);
     }
 
-    public function markFailed(string $message): void
+    public function markFailed(string $message): bool
     {
-        $this->update([
-            'status' => self::STATUS_FAILED,
-            'error_message' => $message,
-            'finished_at' => now(),
-        ]);
+        $updated = static::query()
+            ->whereKey($this->id)
+            ->where('status', '!=', self::STATUS_COMPLETED)
+            ->update([
+                'status' => self::STATUS_FAILED,
+                'error_message' => $message,
+                'finished_at' => now(),
+            ]);
+
+        if ($updated === 1) {
+            $this->refresh();
+        }
+
+        return $updated === 1;
     }
 }

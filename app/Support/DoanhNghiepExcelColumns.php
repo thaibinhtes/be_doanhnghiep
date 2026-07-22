@@ -12,6 +12,7 @@ class DoanhNghiepExcelColumns
         'ngaySinhNguoiDaiDien',
         'ngayCap',
         'ngayDangKyThayDoi',
+        'ngayDinhDanh',
     ];
 
     /**

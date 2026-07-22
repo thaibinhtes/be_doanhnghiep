@@ -92,6 +92,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hanh-chinh/mappings/groups', [HanhChinhMappingController::class, 'indexGroups']);
         Route::get('/hanh-chinh/unmapped-doanh-nghiep', [HanhChinhMappingController::class, 'unmappedCompanies']);
     Route::get('/hanh-chinh/sync-doanh-nghiep/fields', [HanhChinhMappingController::class, 'companyFieldSyncOptions']);
+    Route::get('/hanh-chinh/sync-doanh-nghiep/raw-groups', [HanhChinhMappingController::class, 'previewCompanyRawGroups']);
 
     Route::middleware('permission:feature.cadastral.manage')->group(function () {
         Route::post('/hanh-chinh/cu/import', [HanhChinhCuController::class, 'bulkImport']);
@@ -113,6 +114,7 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/hanh-chinh/mappings/{hanhChinhMapping}', [HanhChinhMappingController::class, 'destroy']);
         Route::post('/hanh-chinh/sync-doanh-nghiep', [HanhChinhMappingController::class, 'syncCompanies']);
         Route::post('/hanh-chinh/sync-doanh-nghiep-field', [HanhChinhMappingController::class, 'syncCompanyField']);
+        Route::post('/hanh-chinh/sync-doanh-nghiep-raw-groups', [HanhChinhMappingController::class, 'commitCompanyRawGroups']);
         Route::post('/hanh-chinh/sync-doanh-nghiep-text-catalogs', [HanhChinhMappingController::class, 'syncCompanyTextCatalogs']);
     });
 
@@ -171,6 +173,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/doanh-nghiep/import-formats', [DoanhNghiepImportFormatController::class, 'store']);
     Route::put('/doanh-nghiep/import-formats/{importFormat}', [DoanhNghiepImportFormatController::class, 'update']);
     Route::delete('/doanh-nghiep/import-formats/{importFormat}', [DoanhNghiepImportFormatController::class, 'destroy']);
+    Route::post('/doanh-nghiep/import-preview', [DoanhNghiepController::class, 'importPreview']);
     Route::post('/doanh-nghiep/import', [DoanhNghiepController::class, 'import']);
     Route::get('/doanh-nghiep/import-jobs', [DoanhNghiepImportJobController::class, 'index']);
     Route::get('/doanh-nghiep/import-jobs/{importJob}', [DoanhNghiepImportJobController::class, 'show']);
@@ -207,6 +210,8 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/hop-tac-xa/bulk', [HopTacXaController::class, 'bulkDestroy']);
     Route::get('/hop-tac-xa/clear-by-don-vi/preview', [HopTacXaController::class, 'clearByDonViPreview']);
     Route::delete('/hop-tac-xa/clear-by-don-vi', [HopTacXaController::class, 'clearByDonVi']);
+    Route::patch('/hop-tac-xa/dinh-danh/bulk', [HopTacXaController::class, 'bulkUpdateDinhDanh']);
+    Route::patch('/hop-tac-xa/{hop_tac_xa}/dinh-danh', [HopTacXaController::class, 'updateDinhDanh']);
     Route::apiResource('hop-tac-xa', HopTacXaController::class);
 
     Route::get('/tax-units', [TaxUnitController::class, 'index']);

@@ -12,6 +12,7 @@ use App\Support\ImportSocketTopics;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -23,10 +24,14 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 1;
 
+    public int $uniqueFor = 7200;
+
     public function __construct(
         public readonly int $importJobId,
         public readonly bool $daCapNhatDinhDanh,
-    ) {}
+    ) {
+        $this->onQueue('doanh-nghiep');
+    }
 
     public function uniqueId(): string
     {
@@ -35,11 +40,17 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        @ini_set('memory_limit', '512M');
+
         $importJob = DoanhNghiepImportJob::query()->find($this->importJobId);
-        if (!$importJob || !in_array($importJob->status, [
-            DoanhNghiepImportJob::STATUS_PENDING,
-            DoanhNghiepImportJob::STATUS_PROCESSING,
+        if (!$importJob || in_array($importJob->status, [
+            DoanhNghiepImportJob::STATUS_COMPLETED,
+            DoanhNghiepImportJob::STATUS_FAILED,
         ], true)) {
+            return;
+        }
+
+        if (!$importJob->tryClaimForProcessing()) {
             return;
         }
 
@@ -50,7 +61,6 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $importJob->markProcessing();
         ImportSocketNotifier::notify(
             $user->id,
             ImportSocketTopics::EXCEL_STARTED,
@@ -73,6 +83,10 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
         try {
             $startRow = $importJob->start_row ?? DoanhNghiepDinhDanhImportColumnMap::DEFAULT_START_ROW;
             $columnMap = $importJob->column_map;
+            $extensions = is_array($importJob->value_extensions) ? $importJob->value_extensions : [];
+            $lookupField = isset($extensions['lookupField']) && is_string($extensions['lookupField'])
+                ? $extensions['lookupField']
+                : DoanhNghiepDinhDanhImportColumnMap::DEFAULT_LOOKUP_FIELD;
 
             $import = new DoanhNghiepDinhDanhImport(
                 $user,
@@ -80,6 +94,8 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
                 $columnMap,
                 $this->daCapNhatDinhDanh,
                 $importJob->id,
+                null,
+                $lookupField,
             );
 
             $result = DinhDanhHistoryContext::run(['nguon' => 'import'], function () use ($import, $absolutePath) {
@@ -109,6 +125,12 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
 
     private function failJob(DoanhNghiepImportJob $importJob, int $userId, string $message): void
     {
+        $importJob->refresh();
+
+        if ($importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED) {
+            return;
+        }
+
         $importJob->markFailed($message);
         ImportSocketNotifier::notify(
             $userId,
@@ -120,5 +142,26 @@ class ProcessDoanhNghiepIdentityImportJob implements ShouldBeUnique, ShouldQueue
                 'entity' => 'doanh-nghiep',
             ],
         );
+    }
+
+    public function failed(?\Throwable $exception): void
+    {
+        $importJob = DoanhNghiepImportJob::query()->find($this->importJobId);
+
+        if (!$importJob) {
+            return;
+        }
+
+        if ($importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED || is_array($importJob->result)) {
+            return;
+        }
+
+        if ($exception instanceof MaxAttemptsExceededException) {
+            return;
+        }
+
+        $message = $exception?->getMessage() ?? 'Import thất bại.';
+
+        $this->failJob($importJob, $importJob->user_id, $message);
     }
 }

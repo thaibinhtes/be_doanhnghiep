@@ -13,6 +13,7 @@ use App\Support\ImportSocketTopics;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -25,9 +26,14 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 1;
 
+    /** Keep unique lock for the full import window (matches $timeout). */
+    public int $uniqueFor = 7200;
+
     public function __construct(
         public readonly int $importJobId,
-    ) {}
+    ) {
+        $this->onQueue('doanh-nghiep');
+    }
 
     public function uniqueId(): string
     {
@@ -36,12 +42,18 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        @ini_set('memory_limit', '512M');
+
         $importJob = DoanhNghiepImportJob::query()->find($this->importJobId);
 
-        if (!$importJob || !in_array($importJob->status, [
-            DoanhNghiepImportJob::STATUS_PENDING,
-            DoanhNghiepImportJob::STATUS_PROCESSING,
+        if (!$importJob || in_array($importJob->status, [
+            DoanhNghiepImportJob::STATUS_COMPLETED,
+            DoanhNghiepImportJob::STATUS_FAILED,
         ], true)) {
+            return;
+        }
+
+        if (!$importJob->tryClaimForProcessing()) {
             return;
         }
 
@@ -52,8 +64,6 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
 
             return;
         }
-
-        $importJob->markProcessing();
 
         ImportSocketNotifier::notify(
             $user->id,
@@ -113,6 +123,12 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
 
     private function failJob(DoanhNghiepImportJob $importJob, int $userId, string $message): void
     {
+        $importJob->refresh();
+
+        if ($importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED) {
+            return;
+        }
+
         $importJob->markFailed($message);
 
         ImportSocketNotifier::notify(
@@ -131,7 +147,15 @@ class ProcessDoanhNghiepImportJob implements ShouldBeUnique, ShouldQueue
     {
         $importJob = DoanhNghiepImportJob::query()->find($this->importJobId);
 
-        if (!$importJob || $importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED) {
+        if (!$importJob) {
+            return;
+        }
+
+        if ($importJob->status === DoanhNghiepImportJob::STATUS_COMPLETED || is_array($importJob->result)) {
+            return;
+        }
+
+        if ($exception instanceof MaxAttemptsExceededException) {
             return;
         }
 

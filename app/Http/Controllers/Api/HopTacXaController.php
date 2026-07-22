@@ -10,6 +10,7 @@ use App\Models\DonVi;
 use App\Models\HopTacXa;
 use App\Models\HopTacXaImportJob;
 use App\Models\User;
+use App\Support\DinhDanhHistoryContext;
 use App\Support\DoanhNghiepScopeHelper;
 use App\Support\DonViDataClearService;
 use App\Support\HopTacXaExcelColumns;
@@ -177,7 +178,7 @@ class HopTacXaController extends ApiController
             return $this->error('Không có quyền truy cập hợp tác xã này.', 403);
         }
 
-        $hopTacXa->load(['donVi', 'createdByUser']);
+        $hopTacXa->load(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh']);
 
         return $this->success(new HopTacXaResource($hopTacXa));
     }
@@ -190,9 +191,86 @@ class HopTacXaController extends ApiController
 
         $data = $this->validatePayload(isUpdate: true);
         $hopTacXa->update($data);
-        $hopTacXa->load(['donVi', 'createdByUser']);
+        $hopTacXa->load(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh']);
 
         return $this->success(new HopTacXaResource($hopTacXa), 'Cập nhật hợp tác xã thành công');
+    }
+
+    /**
+     * Cập nhật trạng thái định danh HTX → ghi vào bảng to_chuc_dinh_danhs.
+     */
+    public function updateDinhDanh(HopTacXa $hopTacXa): JsonResponse
+    {
+        if (! $this->userCanAccess($hopTacXa)) {
+            return $this->error('Không có quyền truy cập hợp tác xã này.', 403);
+        }
+
+        $validated = request()->validate([
+            'daCapNhatDinhDanh' => ['required', 'boolean'],
+        ]);
+
+        DinhDanhHistoryContext::run(['nguon' => 'thu_cong'], function () use ($hopTacXa, $validated) {
+            $hopTacXa->update([
+                'da_cap_nhat_dinh_danh' => (bool) $validated['daCapNhatDinhDanh'],
+            ]);
+        });
+
+        $hopTacXa->load(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh']);
+
+        return $this->success(
+            new HopTacXaResource($hopTacXa->fresh(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh'])),
+            $validated['daCapNhatDinhDanh'] ? 'Đã cập nhật định danh' : 'Đã hủy định danh'
+        );
+    }
+
+    /**
+     * Định danh / hủy định danh HTX hàng loạt theo mã số thuế.
+     */
+    public function bulkUpdateDinhDanh(): JsonResponse
+    {
+        $validated = request()->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.maSoThue' => ['required', 'string', 'max:50'],
+            'items.*.daCapNhatDinhDanh' => ['required', 'boolean'],
+        ]);
+
+        $updated = 0;
+        $failed = 0;
+        $errors = [];
+
+        DinhDanhHistoryContext::run(['nguon' => 'hang_loat'], function () use ($validated, &$updated, &$failed, &$errors) {
+            foreach ($validated['items'] as $index => $item) {
+                $mst = trim((string) $item['maSoThue']);
+                $htx = HopTacXaScopeHelper::query(request()->user())
+                    ->where('ma_so_thue', $mst)
+                    ->first();
+
+                if (! $htx) {
+                    $failed++;
+                    $errors[] = [
+                        'row' => $index + 1,
+                        'message' => "Không tìm thấy HTX với MST {$mst}.",
+                    ];
+
+                    continue;
+                }
+
+                $htx->update([
+                    'da_cap_nhat_dinh_danh' => (bool) $item['daCapNhatDinhDanh'],
+                ]);
+                $updated++;
+            }
+        });
+
+        return $this->success(
+            [
+                'imported' => 0,
+                'updated' => $updated,
+                'failed' => $failed,
+                'errors' => $errors,
+            ],
+            "Cập nhật định danh HTX hàng loạt: {$updated} thành công, {$failed} lỗi."
+        );
     }
 
     public function destroy(HopTacXa $hopTacXa): JsonResponse
@@ -289,7 +367,7 @@ class HopTacXaController extends ApiController
         $user = request()->user();
         $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
         $query = HopTacXaScopeHelper::query($user)
-            ->with(['donVi', 'createdByUser', 'taxManagement']);
+            ->with(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh']);
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = HopTacXaScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
@@ -347,6 +425,7 @@ class HopTacXaController extends ApiController
             'hoatDong' => ['nullable', 'string', 'max:255'],
             'dsThanhVien' => ['nullable', 'string'],
             'ghiChu' => ['nullable', 'string'],
+            'daCapNhatDinhDanh' => ['nullable', 'boolean'],
         ];
 
         $validated = request()->validate($rules);

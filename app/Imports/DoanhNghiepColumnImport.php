@@ -20,6 +20,8 @@ class DoanhNghiepColumnImport implements OnEachRow, WithChunkReading, WithColumn
     /** @var array<string, list<string>> */
     private readonly array $columnMap;
 
+    private readonly string $endColumn;
+
     /**
      * @param  array<string, list<string>>|null  $columnMap
      * @param  array<string, string|array<string, mixed>>|null  $valueExtensions
@@ -33,6 +35,7 @@ class DoanhNghiepColumnImport implements OnEachRow, WithChunkReading, WithColumn
     ) {
         $this->processor = new DoanhNghiepImportProcessor($user, $valueExtensions, $importJobId);
         $this->columnMap = DoanhNghiepImportColumnMap::resolve($columnMap);
+        $this->endColumn = DoanhNghiepImportColumnMap::resolveEndColumn($this->columnMap);
     }
 
     public function onRow(Row $row): void
@@ -47,10 +50,7 @@ class DoanhNghiepColumnImport implements OnEachRow, WithChunkReading, WithColumn
             return;
         }
 
-        $data = DoanhNghiepImportColumnMap::parseRow(
-            $row->toArray(null, false, false, $this->endColumn()),
-            $this->columnMap,
-        );
+        $data = DoanhNghiepImportColumnMap::parseExcelRow($row, $this->columnMap);
 
         if (DoanhNghiepImportColumnMap::isEmptyRow($data)) {
             $this->stopped = true;
@@ -73,7 +73,7 @@ class DoanhNghiepColumnImport implements OnEachRow, WithChunkReading, WithColumn
 
     public function endColumn(): string
     {
-        return 'AR';
+        return $this->endColumn;
     }
 
     /**

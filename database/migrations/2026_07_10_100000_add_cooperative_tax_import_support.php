@@ -39,8 +39,24 @@ return new class extends Migration
                 $table->string('source', 30)->default('manual');
                 $table->timestamps();
 
-                $table->index(['hop_tac_xa_id', 'tax_paid_at']);
-                $table->index(['tax_unit_id', 'tax_paid_at']);
+                $table->index(['hop_tac_xa_id', 'tax_paid_at'], 'coop_tax_hist_htx_paid_idx');
+                $table->index(['tax_unit_id', 'tax_paid_at'], 'coop_tax_hist_unit_paid_idx');
+            });
+        } else {
+            // Resume after a failed MySQL run that created the table but not the indexes
+            // (auto-generated index names exceeded MySQL's 64-char limit).
+            Schema::table('cooperative_tax_payment_histories', function (Blueprint $table) {
+                $sm = Schema::getConnection()->getSchemaBuilder();
+                $indexes = collect($sm->getIndexes('cooperative_tax_payment_histories'))
+                    ->pluck('name')
+                    ->all();
+
+                if (! in_array('coop_tax_hist_htx_paid_idx', $indexes, true)) {
+                    $table->index(['hop_tac_xa_id', 'tax_paid_at'], 'coop_tax_hist_htx_paid_idx');
+                }
+                if (! in_array('coop_tax_hist_unit_paid_idx', $indexes, true)) {
+                    $table->index(['tax_unit_id', 'tax_paid_at'], 'coop_tax_hist_unit_paid_idx');
+                }
             });
         }
 

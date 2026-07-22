@@ -22,9 +22,11 @@ use App\Support\DoanhNghiepDinhDanhImportColumnMap;
 use App\Support\DoanhNghiepExcelColumns;
 use App\Support\DoanhNghiepFieldUpdateImportColumnMap;
 use App\Support\DoanhNghiepFieldUpdateRegistry;
+use App\Support\DoanhNghiepHanhChinhAreaFilter;
 use App\Support\DoanhNghiepHanhChinhTextMapper;
 use App\Support\DoanhNghiepImportColumnMap;
 use App\Support\DoanhNghiepImportExtensionHelper;
+use App\Support\DoanhNghiepImportPreviewService;
 use App\Support\DoanhNghiepLoaiHinhHelper;
 use App\Support\DoanhNghiepNganhNgheHelper;
 use App\Support\DoanhNghiepScopeHelper;
@@ -117,6 +119,53 @@ class DoanhNghiepController extends ApiController
     }
 
     /**
+     * Preview mapped values from Excel without importing.
+     */
+    public function importPreview(DoanhNghiepImportPreviewService $previewService): JsonResponse
+    {
+        ImportUploadValidator::validate(request(), 'doanh_nghiep_import_preview', [
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+            'valueExtensions' => ['nullable'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:'.DoanhNghiepImportPreviewService::MAX_LIMIT],
+        ]);
+
+        $startRow = request()->has('startRow')
+            ? (int) request('startRow')
+            : DoanhNghiepImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap(request()->input('columnMap'));
+        $valueExtensions = $this->parseImportValueExtensions(request()->input('valueExtensions'));
+        $limit = request()->has('limit')
+            ? (int) request('limit')
+            : DoanhNghiepImportPreviewService::DEFAULT_LIMIT;
+
+        ImportExcelKindGuard::assertDoanhNghiepColumnMap($columnMap);
+
+        $uploadedFile = request()->file('file');
+        $tempPath = $uploadedFile->store('imports/preview');
+        $absolutePath = Storage::disk('local')->path($tempPath);
+
+        try {
+            ImportExcelKindGuard::assertExpectedKind(
+                $absolutePath,
+                ImportExcelKindDetector::KIND_DOANH_NGHIEP,
+            );
+
+            $preview = $previewService->preview(
+                $absolutePath,
+                $startRow,
+                $columnMap,
+                $valueExtensions,
+                $limit,
+            );
+        } finally {
+            Storage::disk('local')->delete($tempPath);
+        }
+
+        return $this->success($preview, 'Xem trước ánh xạ cột thành công');
+    }
+
+    /**
      * Queue import companies from Excel file.
      */
     public function import(): JsonResponse
@@ -202,21 +251,36 @@ class DoanhNghiepController extends ApiController
 
     /**
      * Import identity status updates from Excel file.
+     * Chỉ đối chiếu 1 field + ghi định danh/ngày — không sửa thông tin DN khác.
      */
     public function importDinhDanh(): JsonResponse
     {
         ImportUploadValidator::validate(request(), 'doanh_nghiep_import_dinh_danh', [
             'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'columnMap' => ['nullable'],
+            'lookupField' => ['nullable', 'string', 'max:50'],
             'daCapNhatDinhDanh' => ['required', 'boolean'],
         ]);
 
         $startRow = request()->has('startRow')
             ? (int) request('startRow')
             : DoanhNghiepDinhDanhImportColumnMap::DEFAULT_START_ROW;
+        $lookupField = (string) (request('lookupField') ?: DoanhNghiepDinhDanhImportColumnMap::DEFAULT_LOOKUP_FIELD);
+        if (! DoanhNghiepDinhDanhImportColumnMap::isLookupField($lookupField)) {
+            return $this->error('Trường đối chiếu không hợp lệ.', 422);
+        }
+
         $columnMap = DoanhNghiepDinhDanhImportColumnMap::normalizeStoredColumnMap(
-            $this->parseImportColumnMap(request()->input('columnMap')) ?? DoanhNghiepDinhDanhImportColumnMap::DEFAULT_COLUMN_MAP
+            $this->parseImportColumnMap(request()->input('columnMap')) ?? [],
+            $lookupField,
         );
+
+        try {
+            DoanhNghiepDinhDanhImportColumnMap::assertValid($columnMap, $lookupField);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
         $forcedDinhDanhStatus = filter_var(request()->input('daCapNhatDinhDanh'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
         try {
@@ -239,6 +303,7 @@ class DoanhNghiepController extends ApiController
             'original_filename' => $uploadedFile->getClientOriginalName(),
             'start_row' => $startRow,
             'column_map' => $columnMap,
+            'value_extensions' => ['lookupField' => $lookupField],
             'use_column_map' => true,
         ]);
         ProcessDoanhNghiepIdentityImportJob::dispatch($importJob->id, (bool) $forcedDinhDanhStatus);
@@ -268,10 +333,11 @@ class DoanhNghiepController extends ApiController
     {
         return $this->success([
             'startRow' => DoanhNghiepDinhDanhImportColumnMap::DEFAULT_START_ROW,
+            'lookupField' => DoanhNghiepDinhDanhImportColumnMap::DEFAULT_LOOKUP_FIELD,
+            'lookupFields' => DoanhNghiepDinhDanhImportColumnMap::LOOKUP_FIELDS,
+            'dateField' => DoanhNghiepDinhDanhImportColumnMap::DATE_FIELD,
             'columnMap' => DoanhNghiepDinhDanhImportColumnMap::DEFAULT_COLUMN_MAP,
-            'columnLabels' => [
-                'maSoDoanhNghiep' => DoanhNghiepExcelColumns::COLUMNS['maSoDoanhNghiep'],
-            ],
+            'columnLabels' => DoanhNghiepDinhDanhImportColumnMap::COLUMN_LABELS,
         ]);
     }
 
@@ -740,7 +806,7 @@ class DoanhNghiepController extends ApiController
         $user = request()->user();
         $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
         $query = DoanhNghiepScopeHelper::query($user)
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'tinhThanhCu', 'quanHuyenCu', 'xaPhuongCu', 'tinhThanh', 'xaPhuong', 'taxManagement']);
+            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'tinhThanhCu', 'quanHuyenCu', 'xaPhuongCu', 'tinhThanh', 'xaPhuong', 'taxManagement', 'dinhDanh']);
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = DoanhNghiepScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
@@ -800,6 +866,16 @@ class DoanhNghiepController extends ApiController
                     });
                 }
             })
+            ->when(
+                request('hanhChinhAreaKey') && request()->filled('hanhChinhAreaId'),
+                function ($query) {
+                    DoanhNghiepHanhChinhAreaFilter::apply(
+                        $query,
+                        (string) request('hanhChinhAreaKey'),
+                        (string) request('hanhChinhAreaId'),
+                    );
+                },
+            )
             ->when(request('sortBy'), function ($query, $sortBy) {
                 $direction = request('sortDirection', 'asc');
                 $allowedSorts = [

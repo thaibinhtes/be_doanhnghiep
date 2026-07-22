@@ -13,6 +13,7 @@ use App\Models\HopTacXaImportFormat;
 use App\Models\HopTacXaImportJob;
 use App\Models\TaxImportJob;
 use App\Observers\DoanhNghiepObserver;
+use App\Observers\HopTacXaObserver;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -32,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         DoanhNghiep::observe(DoanhNghiepObserver::class);
+        HopTacXa::observe(HopTacXaObserver::class);
 
         Route::bind('hop_tac_xa', fn (string $value) => HopTacXa::query()->findOrFail($value));
 

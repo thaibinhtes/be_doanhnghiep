@@ -97,6 +97,10 @@ class DoanhNghiepResource extends JsonResource
             ),
             'daCapNhatDinhDanh' => (bool) $this->da_cap_nhat_dinh_danh,
             'trangThaiDinhDanh' => $this->da_cap_nhat_dinh_danh ? 'Đã cập nhật định danh' : 'Chưa cập nhật định danh',
+            'thoiGianDinhDanh' => $this->when(
+                $this->relationLoaded('dinhDanh'),
+                fn () => $this->dinhDanh?->thoi_gian_dinh_danh?->toIso8601String(),
+            ),
             'dienThoai' => $this->dien_thoai,
             'nguoiDaiDienTen' => $this->nguoi_dai_dien_ten,
             'ngaySinhNguoiDaiDien' => $this->ngay_sinh_nguoi_dai_dien,
