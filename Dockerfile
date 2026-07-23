@@ -15,11 +15,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     nginx \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd pdo pdo_pgsql mbstring zip exif pcntl bcmath opcache \
+    && docker-php-ext-install -j$(nproc) gd pdo pdo_mysql pdo_pgsql mbstring zip exif pcntl bcmath opcache \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify extensions required by phpoffice/phpspreadsheet
-RUN php -m | grep -qi gd && php -m | grep -qi zip && php -m | grep -qi fileinfo
+# Verify extensions required by Laravel MySQL + PhpSpreadsheet
+RUN php -m | grep -qi pdo_mysql \
+    && php -m | grep -qi gd \
+    && php -m | grep -qi zip \
+    && php -m | grep -qi fileinfo
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
