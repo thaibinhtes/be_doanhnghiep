@@ -14,9 +14,38 @@ class DashboardController extends ApiController
         private readonly DashboardDinhDanhThongKeService $dinhDanhThongKeService,
     ) {}
 
+    /** Overview nhanh (không gồm breakdown địa bàn). */
     public function index(): JsonResponse
     {
-        return $this->success($this->dashboardService->build(request()->user()));
+        return $this->success($this->dashboardService->buildOverview(request()->user()));
+    }
+
+    public function companyAreas(): JsonResponse
+    {
+        try {
+            $data = $this->dashboardService->buildCompanyAreas(
+                request()->user(),
+                (string) request()->query('areaKey', 'quanHuyenMoi'),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return $this->success($data, 'Lấy thống kê địa bàn doanh nghiệp thành công');
+    }
+
+    public function cooperativeAreas(): JsonResponse
+    {
+        try {
+            $data = $this->dashboardService->buildCooperativeAreas(
+                request()->user(),
+                (string) request()->query('areaKey', 'quanHuyenMoi'),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return $this->success($data, 'Lấy thống kê địa bàn hợp tác xã thành công');
     }
 
     public function dinhDanhTheoNgay(): JsonResponse
