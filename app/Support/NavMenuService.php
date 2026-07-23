@@ -5,11 +5,18 @@ namespace App\Support;
 use App\Models\NavMenuItem;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class NavMenuService
 {
+    private const USER_TREE_TTL = 3600;
+
+    private const BASE_TREE_TTL = 3600;
+
+    private const SYNC_FLAG_TTL = 600;
+
     public function count(): int
     {
         return NavMenuItem::query()->where('is_active', true)->count();
@@ -18,13 +25,21 @@ class NavMenuService
     /** Đảm bảo menu mặc định luôn có đủ mục (tự heal khi thiếu). */
     public function ensureSynced(): void
     {
-        if ($this->count() === 0 || !$this->hasAllRegistryKeys()) {
-            $this->syncFromRegistry();
-        }
+        Cache::remember('nav_menu:ensure_synced_ok', self::SYNC_FLAG_TTL, function () {
+            if ($this->count() === 0 || ! $this->hasAllRegistryKeys()) {
+                $this->syncFromRegistry();
+            } elseif ($this->isStructureBroken()) {
+                $this->repairStructureFromRegistry();
+            }
 
-        if ($this->isStructureBroken()) {
-            $this->repairStructureFromRegistry();
-        }
+            return true;
+        });
+    }
+
+    public function invalidateCaches(): void
+    {
+        CatalogCache::bump(CatalogCache::BUCKET_NAV_MENU);
+        Cache::forget('nav_menu:ensure_synced_ok');
     }
 
     public function hasAllRegistryKeys(): bool
@@ -48,13 +63,16 @@ class NavMenuService
         DB::transaction(function () {
             $this->syncNodes(NavMenuRegistry::tree(), null);
             $this->deactivateOrphanItems();
-            $this->repairStructureFromRegistry();
+            $this->applyStructure(NavMenuRegistry::tree(), null);
         });
+
+        $this->invalidateCaches();
     }
 
     public function repairStructureFromRegistry(): void
     {
         $this->applyStructure(NavMenuRegistry::tree(), null);
+        $this->invalidateCaches();
     }
 
     private function isStructureBroken(): bool
@@ -199,18 +217,33 @@ class NavMenuService
     {
         $this->ensureSynced();
 
-        $user->loadMissing('role.permissions');
+        $user->loadMissing('role');
 
-        $items = $this->allActiveItems();
-        $tree = $this->buildTree($items);
+        $permissionKeys = $user->permissionKeys();
+        sort($permissionKeys);
+        $cacheKey = sprintf(
+            'user:%d:role:%s:root:%d:perm:%s',
+            $user->id,
+            (string) ($user->role_id ?? 0),
+            RoleHierarchyHelper::isRootUser($user) ? 1 : 0,
+            md5(implode(',', $permissionKeys)),
+        );
 
-        if (RoleHierarchyHelper::isRootUser($user)) {
-            return $this->ensureDashboardFirst($tree);
-        }
+        return CatalogCache::remember(
+            CatalogCache::BUCKET_NAV_MENU,
+            $cacheKey,
+            self::USER_TREE_TTL,
+            function () use ($user) {
+                $items = $this->allActiveItems();
+                $tree = $this->buildTree($items);
 
-        $filtered = $this->filterTree($tree, $user);
+                if (RoleHierarchyHelper::isRootUser($user)) {
+                    return $this->ensureDashboardFirst($tree);
+                }
 
-        return $this->ensureDashboardFirst($filtered);
+                return $this->ensureDashboardFirst($this->filterTree($tree, $user));
+            },
+        );
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -218,9 +251,16 @@ class NavMenuService
     {
         $this->ensureSynced();
 
-        $items = NavMenuItem::query()->where('is_active', true)->orderBy('sort_order')->get();
+        return CatalogCache::remember(
+            CatalogCache::BUCKET_NAV_MENU,
+            'admin_tree',
+            self::BASE_TREE_TTL,
+            function () {
+                $items = NavMenuItem::query()->where('is_active', true)->orderBy('sort_order')->get();
 
-        return $this->buildTree($items);
+                return $this->buildTree($items);
+            },
+        );
     }
 
     /**
@@ -404,5 +444,7 @@ class NavMenuService
                 $model->update($updates);
             }
         });
+
+        $this->invalidateCaches();
     }
 }

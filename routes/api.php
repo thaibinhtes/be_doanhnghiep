@@ -97,6 +97,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/hanh-chinh/sync-doanh-nghiep/raw-groups', [HanhChinhMappingController::class, 'previewCompanyRawGroups']);
 
     Route::middleware('permission:feature.cadastral.manage')->group(function () {
+        Route::put('/hanh-chinh/danh-muc/{id}', [HanhChinhDanhMucController::class, 'update'])->whereNumber('id');
+        Route::delete('/hanh-chinh/danh-muc/{id}', [HanhChinhDanhMucController::class, 'destroy'])->whereNumber('id');
         Route::post('/hanh-chinh/cu/import', [HanhChinhCuController::class, 'bulkImport']);
         Route::post('/hanh-chinh/cu/import-excel', [HanhChinhCuController::class, 'importExcel']);
         Route::post('/hanh-chinh/cu/import-formats', [HanhChinhImportFormatController::class, 'store']);

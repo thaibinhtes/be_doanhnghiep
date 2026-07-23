@@ -18,7 +18,7 @@ class NavMenuController extends ApiController
         $user = $request->user();
         abort_unless($user, 401);
 
-        $user->loadMissing('role.permissions');
+        $user->loadMissing('role');
 
         return $this->success(
             $this->navMenuService->treeForUser($user),

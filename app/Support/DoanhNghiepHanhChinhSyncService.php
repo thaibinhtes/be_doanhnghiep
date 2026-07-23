@@ -166,6 +166,14 @@ class DoanhNghiepHanhChinhSyncService
                 }
             });
 
+        if (! $dryRun && (
+            $result['createdTinh'] > 0
+            || $result['createdQuanHuyen'] > 0
+            || $result['createdPhuongXa'] > 0
+        )) {
+            CatalogCache::bump(CatalogCache::BUCKET_HANH_CHINH);
+        }
+
         return $result;
     }
 
@@ -277,6 +285,10 @@ class DoanhNghiepHanhChinhSyncService
                     }
                 }
             });
+
+        if (! $dryRun && $result['created'] > 0) {
+            CatalogCache::bump(CatalogCache::BUCKET_HANH_CHINH);
+        }
 
         return $result;
     }
@@ -429,6 +441,14 @@ class DoanhNghiepHanhChinhSyncService
         $linkResult = null;
         if ($linkCompanies) {
             $linkResult = $this->syncField($field, false, $user);
+        }
+
+        if ($created > 0
+            || $resolveResult['createdTinh'] > 0
+            || $resolveResult['createdQuanHuyen'] > 0
+            || $resolveResult['createdPhuongXa'] > 0
+        ) {
+            CatalogCache::bump(CatalogCache::BUCKET_HANH_CHINH);
         }
 
         return [

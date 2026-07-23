@@ -6,6 +6,7 @@ use App\Http\Resources\PermissionResource;
 use App\Http\Resources\RoleResource;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Support\CatalogCache;
 use App\Support\RoleHierarchyHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,6 +60,8 @@ class RoleController extends ApiController
         $permissionIds = Permission::whereIn('key', $permissionKeys)->pluck('id');
         $role->permissions()->sync($permissionIds);
         $role->load('permissions');
+
+        CatalogCache::bump(CatalogCache::BUCKET_NAV_MENU);
 
         return $this->success(
             new RoleResource($role),

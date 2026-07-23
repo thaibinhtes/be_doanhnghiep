@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Resources\UserResource;
+use App\Http\Resources\AuthUserResource;
 use App\Models\User;
+use App\Support\AuthProfileCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,26 +17,24 @@ class AuthController extends ApiController
             'password' => ['required', 'string'],
         ]);
 
-        if (!$token = auth('api')->attempt($credentials)) {
+        if (! $token = auth('api')->attempt($credentials)) {
             return $this->error('Email hoặc mật khẩu không đúng', 401);
         }
 
         /** @var User $user */
         $user = auth('api')->user();
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             auth('api')->logout();
 
             return $this->error('Tài khoản đã bị vô hiệu hóa', 403);
         }
 
-        $user->load(['role.permissions', 'donVi']);
-
         return $this->success([
             'token' => $token,
             'tokenType' => 'bearer',
             'expiresIn' => auth('api')->factory()->getTTL() * 60,
-            'user' => new UserResource($user),
+            'user' => $this->profilePayload($user),
         ], 'Đăng nhập thành công');
     }
 
@@ -43,9 +42,8 @@ class AuthController extends ApiController
     {
         /** @var User $user */
         $user = auth('api')->user();
-        $user->load(['role.permissions', 'donVi']);
 
-        return $this->success(new UserResource($user));
+        return $this->success($this->profilePayload($user));
     }
 
     public function logout(): JsonResponse
@@ -61,13 +59,37 @@ class AuthController extends ApiController
 
         /** @var User $user */
         $user = auth('api')->user();
-        $user->load(['role.permissions', 'donVi']);
 
         return $this->success([
             'token' => $token,
             'tokenType' => 'bearer',
             'expiresIn' => auth('api')->factory()->getTTL() * 60,
-            'user' => new UserResource($user),
+            'user' => $this->profilePayload($user),
         ], 'Làm mới token thành công');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function profilePayload(User $user): array
+    {
+        $fingerprint = implode(':', [
+            (string) ($user->updated_at?->timestamp ?? 0),
+            (string) ($user->role_id ?? 0),
+            (string) ($user->don_vi_id ?? 0),
+            AuthProfileCache::userBustToken((int) $user->id),
+        ]);
+
+        return AuthProfileCache::rememberMe((int) $user->id, $fingerprint, function () use ($user) {
+            $fresh = User::query()
+                ->select(['id', 'name', 'email', 'is_active', 'role_id', 'don_vi_id', 'created_at', 'updated_at'])
+                ->with([
+                    'role:id,name,slug,level,description',
+                    'donVi:id,parent_id,cap,ma,ten,is_active',
+                ])
+                ->findOrFail($user->id);
+
+            return (new AuthUserResource($fresh))->resolve();
+        });
     }
 }

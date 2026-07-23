@@ -8,6 +8,7 @@ use App\Http\Resources\RoleResource;
 use App\Http\Resources\UserResource;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\AuthProfileCache;
 use App\Support\RoleHierarchyHelper;
 use App\Support\UserScopeHelper;
 use Illuminate\Http\JsonResponse;
@@ -156,6 +157,7 @@ class UserController extends ApiController
         }
 
         $user->update($data);
+        AuthProfileCache::forgetUser((int) $user->id);
         $user->load(['role', 'donVi']);
 
         return $this->success(new UserResource($user->fresh(['role', 'donVi'])), 'Cập nhật người dùng thành công');

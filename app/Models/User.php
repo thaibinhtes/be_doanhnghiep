@@ -59,7 +59,11 @@ class User extends Authenticatable implements JWTSubject
 
     public function permissionKeys(): array
     {
-        return $this->role?->permissionKeys() ?? [];
+        if ($this->relationLoaded('role') && $this->role?->relationLoaded('permissions')) {
+            return $this->role->permissionKeys();
+        }
+
+        return \App\Support\AuthProfileCache::permissionKeysForRole($this->role_id ? (int) $this->role_id : null);
     }
 
     public function hasPermission(string $key): bool
