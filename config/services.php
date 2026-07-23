@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'recaptcha' => [
+        'enabled' => filter_var(env('CAPCHA_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'site_key' => env('CAPCHA_SITE_KEY'),
+        'project_id' => env('CAPCHA_PROJECT_ID'),
+        'api_key' => env('CAPCHA_API_KEY'),
+        'action' => env('CAPCHA_ACTION', 'LOGIN'),
+        'min_score' => (float) env('CAPCHA_MIN_SCORE', 0.5),
+    ],
+
 ];

@@ -37,6 +37,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'check']);
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::get('/auth/captcha', [AuthController::class, 'captchaConfig']);
 
 Route::middleware('auth:api')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);

@@ -18,9 +18,12 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/credentials
 /vendor
 Homestead.json
 Homestead.yaml
 Thumbs.db
+*-service-account.json
+google-credentials.json
 .cursor/
 .specify/

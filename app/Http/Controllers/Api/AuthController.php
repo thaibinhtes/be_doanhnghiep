@@ -5,17 +5,47 @@ namespace App\Http\Controllers\Api;
 use App\Http\Resources\AuthUserResource;
 use App\Models\User;
 use App\Support\AuthProfileCache;
+use App\Support\RecaptchaVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AuthController extends ApiController
 {
+    public function __construct(
+        private readonly RecaptchaVerifier $recaptcha,
+    ) {}
+
+    public function captchaConfig(): JsonResponse
+    {
+        $enabled = $this->recaptcha->isEnabled();
+
+        return $this->success([
+            'enabled' => $enabled,
+            'siteKey' => $enabled ? $this->recaptcha->siteKey() : null,
+            'action' => $enabled ? $this->recaptcha->action() : null,
+        ]);
+    }
+
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
+            'captchaToken' => [$this->recaptcha->isEnabled() ? 'required' : 'nullable', 'string'],
         ]);
+
+        if ($this->recaptcha->isEnabled()) {
+            $ok = $this->recaptcha->verify(
+                $credentials['captchaToken'] ?? null,
+                $request->ip(),
+            );
+
+            if (! $ok) {
+                return $this->error('Xác minh captcha không thành công. Vui lòng thử lại.', 422);
+            }
+        }
+
+        unset($credentials['captchaToken']);
 
         if (! $token = auth('api')->attempt($credentials)) {
             return $this->error('Email hoặc mật khẩu không đúng', 401);
