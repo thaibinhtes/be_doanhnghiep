@@ -181,6 +181,46 @@ class TaxImportColumnMap
     }
 
     /**
+     * Đọc 1 dòng worksheet theo chữ cột ánh xạ (dùng cho preview).
+     *
+     * @param  array<string, list<string>>  $columnMap
+     * @return array<string, mixed>
+     */
+    public static function parseWorksheetRow(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $worksheet, int $rowIndex, array $columnMap): array
+    {
+        $result = [];
+
+        foreach ($columnMap as $key => $columns) {
+            if ($columns === []) {
+                continue;
+            }
+
+            $rawValue = null;
+            $ordered = $columns;
+            usort(
+                $ordered,
+                static fn (string $left, string $right): int => self::columnLetterToIndex($left) <=> self::columnLetterToIndex($right),
+            );
+
+            foreach ($ordered as $letter) {
+                $text = ExcelLetterCellReader::read($worksheet, $rowIndex, $letter);
+                if ($text !== null && $text !== '') {
+                    $rawValue = $text;
+                    break;
+                }
+            }
+
+            if ($rawValue === null || $rawValue === '') {
+                continue;
+            }
+
+            $result[$key] = trim((string) $rawValue);
+        }
+
+        return $result;
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      */
     public static function isEmptyCompanyTaxRow(array $data): bool

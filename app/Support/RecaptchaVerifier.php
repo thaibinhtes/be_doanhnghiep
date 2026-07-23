@@ -13,9 +13,8 @@ class RecaptchaVerifier
             return false;
         }
 
-        return filled(config('services.recaptcha.site_key'))
-            && filled(config('services.recaptcha.project_id'))
-            && filled(config('services.recaptcha.api_key'));
+        // Widget chỉ cần site key; API key dùng khi verify phía server.
+        return filled(config('services.recaptcha.site_key'));
     }
 
     public function siteKey(): ?string
@@ -30,15 +29,31 @@ class RecaptchaVerifier
         return (string) config('services.recaptcha.action', 'LOGIN');
     }
 
-    public function verify(?string $token, ?string $remoteIp = null): bool
+    public function canVerify(): bool
+    {
+        return $this->isEnabled()
+            && filled(config('services.recaptcha.project_id'))
+            && filled(config('services.recaptcha.api_key'));
+    }
+
+    /**
+     * @return array{ok: bool, reason: string|null}
+     */
+    public function verifyDetailed(?string $token, ?string $remoteIp = null): array
     {
         if (! $this->isEnabled()) {
-            return true;
+            return ['ok' => true, 'reason' => null];
         }
 
         $token = trim((string) $token);
         if ($token === '') {
-            return false;
+            return ['ok' => false, 'reason' => 'MISSING'];
+        }
+
+        if (! $this->canVerify()) {
+            Log::warning('reCAPTCHA Enterprise missing project_id or api_key');
+
+            return ['ok' => false, 'reason' => 'CONFIG'];
         }
 
         $siteKey = (string) config('services.recaptcha.site_key');
@@ -77,18 +92,20 @@ class RecaptchaVerifier
                     'body' => $response->json() ?? $response->body(),
                 ]);
 
-                return false;
+                return ['ok' => false, 'reason' => 'HTTP'];
             }
 
             $payload = $response->json() ?? [];
             $tokenProperties = $payload['tokenProperties'] ?? null;
 
             if (! is_array($tokenProperties) || ! ($tokenProperties['valid'] ?? false)) {
+                $reason = (string) ($tokenProperties['invalidReason'] ?? 'UNKNOWN');
+
                 Log::warning('reCAPTCHA Enterprise token invalid', [
-                    'reason' => $tokenProperties['invalidReason'] ?? 'UNKNOWN',
+                    'reason' => $reason,
                 ]);
 
-                return false;
+                return ['ok' => false, 'reason' => $reason];
             }
 
             $actualAction = (string) ($tokenProperties['action'] ?? '');
@@ -98,7 +115,7 @@ class RecaptchaVerifier
                     'actual' => $actualAction,
                 ]);
 
-                return false;
+                return ['ok' => false, 'reason' => 'ACTION_MISMATCH'];
             }
 
             $score = $payload['riskAnalysis']['score'] ?? null;
@@ -108,16 +125,21 @@ class RecaptchaVerifier
                     'min_score' => $minScore,
                 ]);
 
-                return false;
+                return ['ok' => false, 'reason' => 'SCORE'];
             }
 
-            return true;
+            return ['ok' => true, 'reason' => null];
         } catch (\Throwable $e) {
             Log::warning('reCAPTCHA Enterprise verify failed', [
                 'message' => $e->getMessage(),
             ]);
 
-            return false;
+            return ['ok' => false, 'reason' => 'EXCEPTION'];
         }
+    }
+
+    public function verify(?string $token, ?string $remoteIp = null): bool
+    {
+        return $this->verifyDetailed($token, $remoteIp)['ok'];
     }
 }

@@ -25,7 +25,7 @@ class DashboardController extends ApiController
         try {
             $data = $this->dashboardService->buildCompanyAreas(
                 request()->user(),
-                (string) request()->query('areaKey', 'quanHuyenMoi'),
+                (string) request()->query('areaKey', 'phuongXaMoi'),
             );
         } catch (InvalidArgumentException $exception) {
             return $this->error($exception->getMessage(), 422);
@@ -39,7 +39,7 @@ class DashboardController extends ApiController
         try {
             $data = $this->dashboardService->buildCooperativeAreas(
                 request()->user(),
-                (string) request()->query('areaKey', 'quanHuyenMoi'),
+                (string) request()->query('areaKey', 'phuongXaMoi'),
             );
         } catch (InvalidArgumentException $exception) {
             return $this->error($exception->getMessage(), 422);

@@ -93,9 +93,9 @@ class DashboardService
     public function areaOptions(): array
     {
         return [
+            ['key' => 'phuongXaMoi', 'label' => 'Phường / Xã / Thị trấn mới'],
             ['key' => 'quanHuyenMoi', 'label' => 'Quận / Huyện mới'],
             ['key' => 'quanHuyenCu', 'label' => 'Quận / Huyện cũ'],
-            ['key' => 'phuongXaMoi', 'label' => 'Phường / Xã / Thị trấn mới'],
             ['key' => 'phuongXaCu', 'label' => 'Phường / Xã / Thị trấn cũ'],
         ];
     }

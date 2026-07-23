@@ -32,6 +32,7 @@ class PermissionRegistry
             ['key' => 'menu.reports.summary', 'name' => 'Báo cáo tổng hợp', 'type' => 'menu', 'group_name' => 'Báo cáo', 'path' => '/reports/summary', 'sort_order' => 25],
             ['key' => 'menu.reports.progress', 'name' => 'Báo cáo tiến độ định danh', 'type' => 'menu', 'group_name' => 'Báo cáo', 'path' => '/reports/progress', 'sort_order' => 26],
             ['key' => 'menu.reports.identity-history', 'name' => 'Lịch sử định danh doanh nghiệp', 'type' => 'menu', 'group_name' => 'Báo cáo', 'path' => '/reports/identity-history', 'sort_order' => 27],
+            ['key' => 'menu.reports.tax-import-history', 'name' => 'Lịch sử import đơn vị thuế với trạng thái thuế', 'type' => 'menu', 'group_name' => 'Báo cáo', 'path' => '/reports/tax-import-history', 'sort_order' => 28],
 
             // Menu — Hệ thống
             ['key' => 'menu.admin.roles', 'name' => 'Phân quyền', 'type' => 'menu', 'group_name' => 'Hệ thống', 'path' => '/admin/roles', 'sort_order' => 30],
@@ -90,6 +91,7 @@ class PermissionRegistry
             'menu.reports.summary',
             'menu.reports.progress',
             'menu.reports.identity-history',
+            'menu.reports.tax-import-history',
             'menu.members.list',
             'menu.cooperatives.list',
             'menu.import-history',

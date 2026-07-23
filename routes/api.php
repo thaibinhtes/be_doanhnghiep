@@ -232,6 +232,7 @@ Route::middleware('auth:api')->group(function () {
     Route::middleware('permission:feature.org-units.manage')->group(function () {
         Route::post('/tax-units', [TaxUnitController::class, 'store']);
         Route::post('/tax-units/import-excel', [TaxUnitController::class, 'importExcel']);
+        Route::post('/tax-units/import-preview', [TaxUnitController::class, 'importPreview']);
         Route::put('/tax-units/{taxUnit}', [TaxUnitController::class, 'update']);
         Route::patch('/tax-units/{taxUnit}', [TaxUnitController::class, 'update']);
         Route::delete('/tax-units/{taxUnit}', [TaxUnitController::class, 'destroy']);

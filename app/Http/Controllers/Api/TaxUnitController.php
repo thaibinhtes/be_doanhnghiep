@@ -9,8 +9,10 @@ use App\Models\TaxUnit;
 use App\Support\ImportJobScopeHelper;
 use App\Support\TaxExcelColumns;
 use App\Support\TaxImportColumnMap;
+use App\Support\TaxUnitImportPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class TaxUnitController extends ApiController
 {
@@ -84,6 +86,41 @@ class TaxUnitController extends ApiController
             'columnLabels' => TaxExcelColumns::taxUnitColumnLabels(),
             'valueExtensions' => [],
         ]);
+    }
+
+    public function importPreview(Request $request, TaxUnitImportPreviewService $previewService): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
+            'startRow' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'columnMap' => ['nullable'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:'.TaxUnitImportPreviewService::MAX_LIMIT],
+        ]);
+
+        $startRow = $request->has('startRow')
+            ? (int) $request->input('startRow')
+            : TaxImportColumnMap::DEFAULT_START_ROW;
+        $columnMap = $this->parseImportColumnMap($request->input('columnMap'));
+        $limit = $request->has('limit')
+            ? (int) $request->input('limit')
+            : TaxUnitImportPreviewService::DEFAULT_LIMIT;
+
+        $uploadedFile = $request->file('file');
+        $tempPath = $uploadedFile->store('imports/preview');
+        $absolutePath = Storage::disk('local')->path($tempPath);
+
+        try {
+            $preview = $previewService->preview(
+                $absolutePath,
+                $startRow,
+                $columnMap,
+                $limit,
+            );
+        } finally {
+            Storage::disk('local')->delete($tempPath);
+        }
+
+        return $this->success($preview, 'Xem trước ánh xạ đơn vị thuế thành công');
     }
 
     public function importExcel(Request $request): JsonResponse

@@ -101,6 +101,7 @@ class NavMenuRegistry
                     ['item_key' => 'link.reports.summary', 'label' => 'Báo cáo tổng hợp', 'path' => '/reports/summary', 'permission_key' => 'menu.reports.summary'],
                     ['item_key' => 'link.reports.progress', 'label' => 'Báo cáo tiến độ', 'path' => '/reports/progress', 'permission_key' => 'menu.reports.progress'],
                     ['item_key' => 'link.reports.identity-history', 'label' => 'Lịch sử định danh doanh nghiệp', 'path' => '/reports/identity-history', 'permission_key' => 'menu.reports.identity-history'],
+                    ['item_key' => 'link.reports.tax-import-history', 'label' => 'Lịch sử import đơn vị thuế với trạng thái thuế', 'path' => '/reports/tax-import-history', 'permission_key' => 'menu.reports.tax-import-history'],
                     ['item_key' => 'link.companies.import-history', 'label' => 'Lịch sử import doanh nghiệp', 'path' => '/companies/import-history', 'permission_key' => 'menu.import-history'],
                     ['item_key' => 'link.cooperatives.import-history', 'label' => 'Lịch sử import hợp tác xã', 'path' => '/cooperatives/import-history', 'permission_key' => 'menu.import-history'],
                     ['item_key' => 'link.admin.import-history', 'label' => 'Danh mục lịch sử import', 'path' => '/admin/import-history', 'permission_key' => 'menu.import-history'],

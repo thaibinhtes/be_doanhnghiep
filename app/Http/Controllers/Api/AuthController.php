@@ -35,13 +35,27 @@ class AuthController extends ApiController
         ]);
 
         if ($this->recaptcha->isEnabled()) {
-            $ok = $this->recaptcha->verify(
+            if (! $this->recaptcha->canVerify()) {
+                return $this->error(
+                    'Captcha chưa cấu hình đủ (thiếu CAPCHA_API_KEY hoặc CAPCHA_PROJECT_ID).',
+                    422,
+                );
+            }
+
+            $result = $this->recaptcha->verifyDetailed(
                 $credentials['captchaToken'] ?? null,
                 $request->ip(),
             );
 
-            if (! $ok) {
-                return $this->error('Xác minh captcha không thành công. Vui lòng thử lại.', 422);
+            if (! $result['ok']) {
+                $message = match ($result['reason']) {
+                    'DUPE' => 'Captcha đã được sử dụng. Vui lòng tích lại captcha rồi đăng nhập.',
+                    'EXPIRED', 'TIMEOUT' => 'Captcha đã hết hạn. Vui lòng tích lại captcha.',
+                    'BROWSER_ERROR', 'INVALID_REASON_UNSPECIFIED', 'UNKNOWN' => 'Xác minh captcha không thành công. Vui lòng tích lại captcha.',
+                    default => 'Xác minh captcha không thành công. Vui lòng thử lại.',
+                };
+
+                return $this->error($message, 422);
             }
         }
 
