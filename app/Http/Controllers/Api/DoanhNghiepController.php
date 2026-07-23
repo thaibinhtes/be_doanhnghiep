@@ -58,8 +58,8 @@ class DoanhNghiepController extends ApiController
      */
     public function index(): AnonymousResourceCollection
     {
-        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 500);
-        $doanhNghieps = $this->buildFilteredQuery()->paginate($perPage);
+        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 100);
+        $doanhNghieps = $this->buildFilteredQuery(forList: true)->paginate($perPage);
 
         return DoanhNghiepResource::collection($doanhNghieps);
     }
@@ -800,69 +800,163 @@ class DoanhNghiepController extends ApiController
 
     /**
      * Build filtered query shared by index and export.
+     *
+     * @param  bool  $forList  Slim eager-load for list page (faster); export/detail keep full relations.
      */
-    private function buildFilteredQuery(): Builder
+    private function buildFilteredQuery(bool $forList = false): Builder
     {
         $user = request()->user();
         $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
-        $query = DoanhNghiepScopeHelper::query($user)
-            ->with(['nguoiDaiDien', 'chuSoHuu', 'memberCompanies.member', 'dnTrangThai', 'dnLoaiHinh', 'nganhNgheKdChinh', 'donVi', 'createdByUser', 'tinhThanhCu', 'quanHuyenCu', 'xaPhuongCu', 'tinhThanh', 'xaPhuong', 'taxManagement', 'dinhDanh']);
+        $query = DoanhNghiepScopeHelper::query($user);
+
+        if ($forList) {
+            // Text fields (địa chỉ, người đại diện…) already live on doanh_nghieps — skip legacy joins.
+            $query->select([
+                'doanh_nghieps.id',
+                'doanh_nghieps.tt',
+                'doanh_nghieps.ma_so_doanh_nghiep',
+                'doanh_nghieps.ten_doanh_nghiep',
+                'doanh_nghieps.dia_chi',
+                'doanh_nghieps.dia_chi_cu',
+                'doanh_nghieps.dia_chi_moi',
+                'doanh_nghieps.long',
+                'doanh_nghieps.lat',
+                'doanh_nghieps.quan_huyen',
+                'doanh_nghieps.phuong_xa',
+                'doanh_nghieps.tinh_thanh_cu',
+                'doanh_nghieps.tinh_thanh_moi',
+                'doanh_nghieps.quan_huyen_cu',
+                'doanh_nghieps.quan_huyen_moi',
+                'doanh_nghieps.xa_phuong_cu',
+                'doanh_nghieps.xa_phuong_moi',
+                'doanh_nghieps.tinh_thanh_cu_code',
+                'doanh_nghieps.quan_huyen_cu_code',
+                'doanh_nghieps.xa_phuong_cu_code',
+                'doanh_nghieps.tinh_thanh_code',
+                'doanh_nghieps.xa_phuong_code',
+                'doanh_nghieps.tinh_thanh_cu_id',
+                'doanh_nghieps.tinh_thanh_moi_id',
+                'doanh_nghieps.quan_huyen_cu_id',
+                'doanh_nghieps.xa_phuong_cu_id',
+                'doanh_nghieps.quan_huyen_moi_id',
+                'doanh_nghieps.xa_phuong_moi_id',
+                'doanh_nghieps.ghi_chu_hanh_chinh',
+                'doanh_nghieps.von_dieu_le',
+                'doanh_nghieps.trang_thai',
+                'doanh_nghieps.dn_trang_thai_id',
+                'doanh_nghieps.ly_do_trang_thai',
+                'doanh_nghieps.da_cap_nhat_dinh_danh',
+                'doanh_nghieps.dien_thoai',
+                'doanh_nghieps.nguoi_dai_dien_ten',
+                'doanh_nghieps.ngay_sinh_nguoi_dai_dien',
+                'doanh_nghieps.chu_so_huu_ten',
+                'doanh_nghieps.nganh_nghe_kd_chinh',
+                'doanh_nghieps.nganh_nghe_kd',
+                'doanh_nghieps.ngay_cap',
+                'doanh_nghieps.ngay_dang_ky_thay_doi',
+                'doanh_nghieps.loai_hinh_dn',
+                'doanh_nghieps.dn_loai_hinh_id',
+                'doanh_nghieps.so_luong_lao_dong',
+                'doanh_nghieps.loai_dn',
+                'doanh_nghieps.don_vi_id',
+                'doanh_nghieps.created_by_user_id',
+                'doanh_nghieps.ds_co_dong',
+                'doanh_nghieps.created_at',
+                'doanh_nghieps.updated_at',
+            ])->with([
+                'dnTrangThai:id,ma,ten,loai',
+                'dnLoaiHinh:id,ma,ten',
+                'taxManagement:id,doanh_nghiep_id',
+                'memberCompanies:id,doanh_nghiep_id,member_id,date_join,position,investment_amount',
+                'memberCompanies.member:id,full_name',
+                'donVi:id,ma,ten',
+            ]);
+        } else {
+            $query->with([
+                'nguoiDaiDien',
+                'chuSoHuu',
+                'memberCompanies.member',
+                'dnTrangThai',
+                'dnLoaiHinh',
+                'nganhNgheKdChinh',
+                'donVi',
+                'createdByUser',
+                'tinhThanhCu',
+                'quanHuyenCu',
+                'xaPhuongCu',
+                'tinhThanh',
+                'xaPhuong',
+                'taxManagement',
+                'dinhDanh',
+            ]);
+        }
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = DoanhNghiepScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
             if ($scopeDonViIds === []) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn('don_vi_id', $scopeDonViIds);
+                $query->whereIn('doanh_nghieps.don_vi_id', $scopeDonViIds);
             }
         }
 
         return $query
             ->when(request('search'), function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('ten_doanh_nghiep', 'like', "%{$search}%")
-                        ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%")
-                        ->orWhere('dia_chi', 'like', "%{$search}%");
+                $term = trim((string) $search);
+                if ($term === '') {
+                    return;
+                }
+
+                $query->where(function ($q) use ($term) {
+                    // Prefer indexed prefix / exact MST before leading-wildcard scans.
+                    $q->where('doanh_nghieps.ma_so_doanh_nghiep', $term)
+                        ->orWhere('doanh_nghieps.ma_so_doanh_nghiep', 'like', $term.'%')
+                        ->orWhere('doanh_nghieps.ten_doanh_nghiep', 'like', $term.'%');
+
+                    if (mb_strlen($term) >= 3) {
+                        $q->orWhere('doanh_nghieps.ten_doanh_nghiep', 'like', '%'.$term.'%')
+                            ->orWhere('doanh_nghieps.dia_chi', 'like', '%'.$term.'%');
+                    }
                 });
             })
             ->when(request('quanHuyen'), function ($query, $quanHuyen) {
-                $query->where('quan_huyen', $quanHuyen);
+                $query->where('doanh_nghieps.quan_huyen', $quanHuyen);
             })
             ->when(request('phuongXa'), function ($query, $phuongXa) {
-                $query->where('phuong_xa', $phuongXa);
+                $query->where('doanh_nghieps.phuong_xa', $phuongXa);
             })
             ->when(request('trangThai'), function ($query, $trangThai) {
-                $query->where('trang_thai', $trangThai);
+                $query->where('doanh_nghieps.trang_thai', $trangThai);
             })
             ->when(request('dnTrangThaiId'), function ($query, $dnTrangThaiId) {
-                $query->where('dn_trang_thai_id', $dnTrangThaiId);
+                $query->where('doanh_nghieps.dn_trang_thai_id', $dnTrangThaiId);
             })
             ->when(request('loaiHinhDN'), function ($query, $loaiHinhDN) {
                 $query->where(function ($builder) use ($loaiHinhDN) {
                     $builder
-                        ->where('loai_hinh_dn', $loaiHinhDN)
+                        ->where('doanh_nghieps.loai_hinh_dn', $loaiHinhDN)
                         ->orWhereHas('dnLoaiHinh', fn ($q) => $q->where('ten', $loaiHinhDN));
                 });
             })
             ->when(request('loaiHinhId'), function ($query, $loaiHinhId) {
-                $query->where('dn_loai_hinh_id', $loaiHinhId);
+                $query->where('doanh_nghieps.dn_loai_hinh_id', $loaiHinhId);
             })
             ->when(request('loaiDN'), function ($query, $loaiDN) {
-                $query->where('loai_dn', $loaiDN);
+                $query->where('doanh_nghieps.loai_dn', $loaiDN);
             })
             ->when(request()->has('daCapNhatDinhDanh'), function ($query) {
                 $daCapNhatDinhDanh = filter_var(request('daCapNhatDinhDanh'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                 if ($daCapNhatDinhDanh !== null) {
-                    $query->where('da_cap_nhat_dinh_danh', $daCapNhatDinhDanh);
+                    $query->where('doanh_nghieps.da_cap_nhat_dinh_danh', $daCapNhatDinhDanh);
                 }
             })
             ->when(request()->has('hasCoordinates'), function ($query) {
                 $hasCoordinates = filter_var(request('hasCoordinates'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                 if ($hasCoordinates === true) {
-                    $query->whereNotNull('long')->whereNotNull('lat');
+                    $query->whereNotNull('doanh_nghieps.long')->whereNotNull('doanh_nghieps.lat');
                 } elseif ($hasCoordinates === false) {
                     $query->where(function ($q) {
-                        $q->whereNull('long')->orWhereNull('lat');
+                        $q->whereNull('doanh_nghieps.long')->orWhereNull('doanh_nghieps.lat');
                     });
                 }
             })
@@ -884,10 +978,10 @@ class DoanhNghiepController extends ApiController
                     'loai_hinh_dn', 'so_luong_lao_dong', 'created_at',
                 ];
                 if (in_array($sortBy, $allowedSorts)) {
-                    $query->orderBy($sortBy, $direction);
+                    $query->orderBy('doanh_nghieps.'.$sortBy, $direction);
                 }
             }, function ($query) {
-                $query->orderBy('created_at', 'desc');
+                $query->orderBy('doanh_nghieps.created_at', 'desc');
             });
     }
 

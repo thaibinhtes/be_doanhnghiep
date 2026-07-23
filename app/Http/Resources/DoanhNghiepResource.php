@@ -4,14 +4,73 @@ namespace App\Http\Resources;
 
 use App\Models\DanhMucNganhNghe;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Pagination\AbstractPaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Enumerable;
 
 class DoanhNghiepResource extends JsonResource
 {
+    /** @var Collection<string, DanhMucNganhNghe>|null */
+    private static ?Collection $sharedNganhNgheCatalog = null;
+
     /**
-     * Transform the resource into an array.
+     * Preload ngành nghề for the whole page (avoids N+1 in toArray).
      *
+     * @param  mixed  $resource
+     */
+    public static function collection($resource): AnonymousResourceCollection
+    {
+        self::preloadNganhNgheCatalog($resource);
+
+        return parent::collection($resource);
+    }
+
+    /**
+     * @param  mixed  $resource
+     */
+    public static function preloadNganhNgheCatalog($resource): void
+    {
+        $items = self::unwrapResourceItems($resource);
+        $codes = [];
+
+        foreach ($items as $item) {
+            $model = $item instanceof self ? $item->resource : $item;
+            if (! is_object($model)) {
+                continue;
+            }
+
+            if (! empty($model->nganh_nghe_kd_chinh)) {
+                $codes[] = (string) $model->nganh_nghe_kd_chinh;
+            }
+
+            foreach ($model->nganh_nghe_kd ?? [] as $code) {
+                if (is_string($code) && $code !== '') {
+                    $codes[] = $code;
+                }
+            }
+        }
+
+        $codes = array_values(array_unique($codes));
+        if ($codes === []) {
+            self::$sharedNganhNgheCatalog = collect();
+
+            return;
+        }
+
+        self::$sharedNganhNgheCatalog = DanhMucNganhNghe::query()
+            ->whereIn('ma', $codes)
+            ->get(['id', 'ma', 'ten', 'cap'])
+            ->keyBy('ma');
+    }
+
+    public static function clearNganhNgheCatalog(): void
+    {
+        self::$sharedNganhNgheCatalog = null;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -109,13 +168,21 @@ class DoanhNghiepResource extends JsonResource
             'chuSoHuu' => $this->whenLoaded('chuSoHuu', fn () => new MemberResource($this->chuSoHuu)),
             'nganhNgheKDChinh' => $this->nganh_nghe_kd_chinh,
             'nganhNgheKDChinhTen' => $this->nganh_nghe_kd_chinh
-                ? ($nganhNgheCatalog->get($this->nganh_nghe_kd_chinh)?->ten ?? $this->nganhNgheKdChinh?->ten)
+                ? ($nganhNgheCatalog->get($this->nganh_nghe_kd_chinh)?->ten
+                    ?? ($this->relationLoaded('nganhNgheKdChinh') ? $this->nganhNgheKdChinh?->ten : null))
                 : null,
             'nganhNgheKDChinhInfo' => $this->when(
-                $this->nganh_nghe_kd_chinh && ($this->relationLoaded('nganhNgheKdChinh') || $nganhNgheCatalog->has($this->nganh_nghe_kd_chinh)),
-                fn () => new DanhMucNganhNgheResource(
-                    $this->nganhNgheKdChinh ?? $nganhNgheCatalog->get($this->nganh_nghe_kd_chinh)
-                )
+                $this->nganh_nghe_kd_chinh && (
+                    ($this->relationLoaded('nganhNgheKdChinh') && $this->nganhNgheKdChinh)
+                    || $nganhNgheCatalog->has($this->nganh_nghe_kd_chinh)
+                ),
+                function () use ($nganhNgheCatalog) {
+                    $row = $this->relationLoaded('nganhNgheKdChinh')
+                        ? $this->nganhNgheKdChinh
+                        : $nganhNgheCatalog->get($this->nganh_nghe_kd_chinh);
+
+                    return $row ? new DanhMucNganhNgheResource($row) : null;
+                }
             ),
             'nganhNgheKD' => $nganhNgheKdCodes,
             'nganhNgheKDList' => collect($nganhNgheKdCodes)
@@ -173,6 +240,10 @@ class DoanhNghiepResource extends JsonResource
 
     private function resolveNganhNgheCatalog(): Collection
     {
+        if (self::$sharedNganhNgheCatalog !== null) {
+            return self::$sharedNganhNgheCatalog;
+        }
+
         $codes = array_values(array_unique(array_filter(array_merge(
             $this->nganh_nghe_kd ?? [],
             $this->nganh_nghe_kd_chinh ? [$this->nganh_nghe_kd_chinh] : []
@@ -204,5 +275,26 @@ class DoanhNghiepResource extends JsonResource
         }
 
         return $moi;
+    }
+
+    /**
+     * @param  mixed  $resource
+     * @return iterable<int, mixed>
+     */
+    private static function unwrapResourceItems($resource): iterable
+    {
+        if ($resource instanceof AbstractPaginator) {
+            return $resource->getCollection();
+        }
+
+        if ($resource instanceof Enumerable) {
+            return $resource;
+        }
+
+        if (is_array($resource)) {
+            return $resource;
+        }
+
+        return [];
     }
 }
