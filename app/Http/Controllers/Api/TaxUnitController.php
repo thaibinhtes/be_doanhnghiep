@@ -37,6 +37,32 @@ class TaxUnitController extends ApiController
         );
     }
 
+    public function options(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+        $limit = min(max((int) $request->query('limit', 200), 1), 500);
+
+        $query = TaxUnit::query()
+            ->select(['id', 'unit_code', 'unit_name'])
+            ->orderBy('unit_code');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('unit_code', 'like', "%{$search}%")
+                    ->orWhere('unit_name', 'like', "%{$search}%");
+            });
+        }
+
+        $items = $query->limit($limit)->get()->map(fn (TaxUnit $item) => [
+            'id' => $item->id,
+            'unitCode' => $item->unit_code,
+            'unitName' => $item->unit_name,
+        ])->values();
+
+        return $this->success($items, 'Lấy danh sách đơn vị thuế (options) thành công');
+    }
+
     public function store(Request $request): JsonResponse
     {
         $payload = $request->validate([

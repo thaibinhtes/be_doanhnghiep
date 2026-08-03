@@ -38,10 +38,17 @@ class DinhDanhLichSuReportService
                     return;
                 }
 
-                $query->where(function (Builder $builder) use ($term) {
-                    $builder
-                        ->where('ma_so_doanh_nghiep', 'like', "%{$term}%")
-                        ->orWhere('ten_doanh_nghiep', 'like', "%{$term}%");
+                // Prefer prefix match (index-friendly) for MST-like tokens; keep contains for names.
+                $isMstLike = (bool) preg_match('/^[0-9A-Za-z\-]{3,}$/', $term);
+
+                $query->where(function (Builder $builder) use ($term, $isMstLike) {
+                    if ($isMstLike) {
+                        $builder->where('ma_so_doanh_nghiep', 'like', "{$term}%");
+                    } else {
+                        $builder->where('ma_so_doanh_nghiep', 'like', "%{$term}%");
+                    }
+
+                    $builder->orWhere('ten_doanh_nghiep', 'like', "%{$term}%");
                 });
             })
             ->when($filters['nguon'] ?? null, fn (Builder $query, string $nguon) => $query->where('nguon', $nguon))

@@ -89,7 +89,11 @@ class TaxManagementController extends ApiController
         $activeOnly = $request->boolean('activeOnly');
 
         $query = CompanyTaxManagement::query()
-            ->with(['doanhNghiep', 'taxUnit', 'importedBy'])
+            ->with([
+                'doanhNghiep:id,ma_so_doanh_nghiep,ten_doanh_nghiep',
+                'taxUnit:id,unit_code,unit_name',
+                'importedBy:id,name',
+            ])
             ->orderByDesc('created_at');
 
         if ($activeOnly) {
@@ -99,11 +103,11 @@ class TaxManagementController extends ApiController
         if ($search !== '') {
             $query->where(function ($builder) use ($search) {
                 $builder
-                    ->where('tax_code', 'like', "%{$search}%")
+                    ->where('tax_code', 'like', "{$search}%")
                     ->orWhereHas('doanhNghiep', function ($companyQuery) use ($search) {
                         $companyQuery
-                            ->where('ten_doanh_nghiep', 'like', "%{$search}%")
-                            ->orWhere('ma_so_doanh_nghiep', 'like', "%{$search}%");
+                            ->where('ma_so_doanh_nghiep', 'like', "{$search}%")
+                            ->orWhere('ten_doanh_nghiep', 'like', "{$search}%");
                     });
             });
         }
@@ -159,7 +163,11 @@ class TaxManagementController extends ApiController
         $activeOnly = $request->boolean('activeOnly');
 
         $query = CooperativeTaxManagement::query()
-            ->with(['hopTacXa', 'taxUnit', 'importedBy'])
+            ->with([
+                'hopTacXa:id,ma_so_thue,ten_htx',
+                'taxUnit:id,unit_code,unit_name',
+                'importedBy:id,name',
+            ])
             ->orderByDesc('created_at');
 
         if ($activeOnly) {
@@ -169,11 +177,11 @@ class TaxManagementController extends ApiController
         if ($search !== '') {
             $query->where(function ($builder) use ($search) {
                 $builder
-                    ->where('tax_code', 'like', "%{$search}%")
+                    ->where('tax_code', 'like', "{$search}%")
                     ->orWhereHas('hopTacXa', function ($cooperativeQuery) use ($search) {
                         $cooperativeQuery
-                            ->where('ten_htx', 'like', "%{$search}%")
-                            ->orWhere('ma_so_thue', 'like', "%{$search}%");
+                            ->where('ma_so_thue', 'like', "{$search}%")
+                            ->orWhere('ten_htx', 'like', "{$search}%");
                     });
             });
         }

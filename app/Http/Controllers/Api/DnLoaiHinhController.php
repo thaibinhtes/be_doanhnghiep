@@ -17,6 +17,7 @@ class DnLoaiHinhController extends ApiController
     public function index(): JsonResponse
     {
         $types = DnLoaiHinh::query()
+            ->select(['id', 'ma', 'ten', 'is_active', 'mac_dinh', 'thu_tu', 'created_at', 'updated_at'])
             ->withCount('doanhNghieps')
             ->when(request()->has('isActive'), function ($q) {
                 $isActive = filter_var(request('isActive'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);

@@ -69,7 +69,10 @@ class HanhChinhMappingController extends ApiController
             });
         }
 
-        $mappings = $query->get();
+        // Hard cap to avoid unbounded memory; FE paginates groups below.
+        $mappings = $query
+            ->limit(5000)
+            ->get();
         $groups = [];
 
         foreach ($mappings as $mapping) {
@@ -106,7 +109,42 @@ class HanhChinhMappingController extends ApiController
             ];
         }
 
-        return $this->success(array_values($groups), 'Lấy nhóm liên kết thành công');
+        $allGroups = array_values($groups);
+        $capped = $mappings->count() >= 5000;
+
+        // Default: return all groups (hard-capped via mapping limit) for existing FE.
+        // Opt-in pagination when page/perPage is provided.
+        if (! $request->has('page') && ! $request->has('perPage') && ! $request->has('per_page')) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Lấy nhóm liên kết thành công',
+                'data' => $allGroups,
+                'meta' => [
+                    'total' => count($allGroups),
+                    'capped' => $capped,
+                ],
+            ]);
+        }
+
+        $perPage = min(max((int) $request->query('perPage', $request->query('per_page', 50)), 1), 100);
+        $page = max((int) $request->query('page', 1), 1);
+        $total = count($allGroups);
+        $lastPage = max((int) ceil($total / $perPage), 1);
+        $page = min($page, $lastPage);
+        $slice = array_slice($allGroups, ($page - 1) * $perPage, $perPage);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lấy nhóm liên kết thành công',
+            'data' => $slice,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+                'capped' => $capped,
+            ],
+        ]);
     }
 
     public function link(Request $request): JsonResponse

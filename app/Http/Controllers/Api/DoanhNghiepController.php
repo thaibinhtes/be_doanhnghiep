@@ -58,7 +58,13 @@ class DoanhNghiepController extends ApiController
      */
     public function index(): AnonymousResourceCollection
     {
-        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 100);
+        $maxPerPage = 100;
+        if (request()->boolean('hasCoordinates') || request()->boolean('has_coordinates')) {
+            // Map view needs more points in one request; still hard-capped.
+            $maxPerPage = 500;
+        }
+
+        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), $maxPerPage);
         $doanhNghieps = $this->buildFilteredQuery(forList: true)->paginate($perPage);
 
         return DoanhNghiepResource::collection($doanhNghieps);
@@ -863,14 +869,23 @@ class DoanhNghiepController extends ApiController
                 'doanh_nghieps.ds_co_dong',
                 'doanh_nghieps.created_at',
                 'doanh_nghieps.updated_at',
-            ])->with([
-                'dnTrangThai:id,ma,ten,loai',
-                'dnLoaiHinh:id,ma,ten',
-                'taxManagement:id,doanh_nghiep_id',
-                'memberCompanies:id,doanh_nghiep_id,member_id,date_join,position,investment_amount',
-                'memberCompanies.member:id,full_name',
-                'donVi:id,ma,ten',
-            ]);
+            ])->with((function () {
+                $relations = [
+                    'dnTrangThai:id,ma,ten,loai',
+                    'dnLoaiHinh:id,ma,ten',
+                    'taxManagement:id,doanh_nghiep_id',
+                    'donVi:id,ma,ten',
+                ];
+
+                // Map view only needs coordinates + identity fields — skip capital members.
+                $forMap = request()->boolean('hasCoordinates') || request()->boolean('has_coordinates');
+                if (! $forMap) {
+                    $relations[] = 'memberCompanies:id,doanh_nghiep_id,member_id,date_join,position,investment_amount';
+                    $relations[] = 'memberCompanies.member:id,full_name';
+                }
+
+                return $relations;
+            })());
         } else {
             $query->with([
                 'nguoiDaiDien',

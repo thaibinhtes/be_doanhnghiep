@@ -34,8 +34,8 @@ class HopTacXaController extends ApiController
 {
     public function index(): AnonymousResourceCollection
     {
-        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 500);
-        $items = $this->buildFilteredQuery()->paginate($perPage);
+        $perPage = min(max((int) request('per_page', request('perPage', 50)), 1), 100);
+        $items = $this->buildFilteredQuery(forList: true)->paginate($perPage);
 
         return HopTacXaResource::collection($items);
     }
@@ -44,7 +44,7 @@ class HopTacXaController extends ApiController
     {
         $filename = 'hop-tac-xa_'.now()->format('Y-m-d_His').'.xlsx';
 
-        $query = $this->buildFilteredQuery();
+        $query = $this->buildFilteredQuery(forList: false);
         if (! request('sortBy')) {
             $query->reorder()->orderByRaw('tt IS NULL')->orderBy('tt')->orderBy('id');
         }
@@ -362,12 +362,50 @@ class HopTacXaController extends ApiController
         );
     }
 
-    private function buildFilteredQuery(): Builder
+    private function buildFilteredQuery(bool $forList = false): Builder
     {
         $user = request()->user();
         $requestedDonViId = DoanhNghiepScopeHelper::resolveRequestedDonViFilterId($user);
-        $query = HopTacXaScopeHelper::query($user)
-            ->with(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh']);
+        $query = HopTacXaScopeHelper::query($user);
+
+        if ($forList) {
+            $query->select([
+                'hop_tac_xas.id',
+                'hop_tac_xas.tt',
+                'hop_tac_xas.ten_htx',
+                'hop_tac_xas.ma_so_thue',
+                'hop_tac_xas.nam_thanh_lap',
+                'hop_tac_xas.chu_tich_hdqt_ten',
+                'hop_tac_xas.dien_thoai',
+                'hop_tac_xas.dia_chi',
+                'hop_tac_xas.dia_chi_cu',
+                'hop_tac_xas.dia_chi_moi',
+                'hop_tac_xas.phuong_xa',
+                'hop_tac_xas.xa_phuong_cu',
+                'hop_tac_xas.xa_phuong_moi',
+                'hop_tac_xas.quan_huyen_cu',
+                'hop_tac_xas.quan_huyen_moi',
+                'hop_tac_xas.tinh_thanh_cu',
+                'hop_tac_xas.tinh_thanh_moi',
+                'hop_tac_xas.dien_tich_ha',
+                'hop_tac_xas.von_dieu_le',
+                'hop_tac_xas.so_thanh_vien',
+                'hop_tac_xas.so_nguoi_lao_dong',
+                'hop_tac_xas.linh_vuc',
+                'hop_tac_xas.hoat_dong',
+                'hop_tac_xas.ds_thanh_vien',
+                'hop_tac_xas.ghi_chu',
+                'hop_tac_xas.da_cap_nhat_dinh_danh',
+                'hop_tac_xas.don_vi_id',
+                'hop_tac_xas.created_by_user_id',
+                'hop_tac_xas.created_at',
+                'hop_tac_xas.updated_at',
+            ])->with([
+                'taxManagement:id,hop_tac_xa_id,is_active',
+            ]);
+        } else {
+            $query->with(['donVi', 'createdByUser', 'taxManagement', 'dinhDanh']);
+        }
 
         if ($requestedDonViId !== null) {
             $scopeDonViIds = HopTacXaScopeHelper::resolveDonViFilterIds($user, $requestedDonViId);
@@ -380,11 +418,20 @@ class HopTacXaController extends ApiController
 
         return $query
             ->when(request('search'), function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('ten_htx', 'like', "%{$search}%")
-                        ->orWhere('ma_so_thue', 'like', "%{$search}%")
-                        ->orWhere('dia_chi', 'like', "%{$search}%")
-                        ->orWhere('chu_tich_hdqt_ten', 'like', "%{$search}%");
+                $term = trim((string) $search);
+                if ($term === '') {
+                    return;
+                }
+
+                $query->where(function ($q) use ($term) {
+                    // Prefer prefix match on indexed MST / name before leading-wildcard scans.
+                    $q->where('ma_so_thue', 'like', "{$term}%")
+                        ->orWhere('ten_htx', 'like', "{$term}%");
+
+                    if (mb_strlen($term) >= 3) {
+                        $q->orWhere('dia_chi', 'like', "%{$term}%")
+                            ->orWhere('chu_tich_hdqt_ten', 'like', "%{$term}%");
+                    }
                 });
             })
             ->when(request('phuongXa'), fn ($query, $phuongXa) => $query->where('phuong_xa', $phuongXa))

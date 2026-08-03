@@ -32,6 +32,7 @@ class DonViController extends ApiController
         }
 
         $query = DonVi::query()
+            ->select(['id', 'parent_id', 'cap', 'ma', 'ten', 'thu_tu', 'is_active', 'created_at', 'updated_at'])
             ->with('parent:id,cap,ma,ten')
             ->withCount(['children', 'users', 'doanhNghieps'])
             ->orderBy('cap')

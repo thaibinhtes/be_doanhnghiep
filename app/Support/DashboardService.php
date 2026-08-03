@@ -220,18 +220,9 @@ class DashboardService
             ->leftJoin("{$dimension['table']} as admin_area", function ($join) use ($dimension, $idColumn, $textColumn) {
                 $loai = $dimension['loai'];
                 if ($idColumn !== null) {
-                    $join->whereRaw(
-                        "admin_area.loai = ?
-                        AND (
-                            admin_area.id = doanh_nghieps.{$idColumn}
-                            OR (
-                                doanh_nghieps.{$idColumn} IS NULL
-                                AND NULLIF(TRIM(COALESCE(doanh_nghieps.{$textColumn}, '')), '') IS NOT NULL
-                                AND LOWER(TRIM(admin_area.ten)) = LOWER(TRIM(doanh_nghieps.{$textColumn}))
-                            )
-                        )",
-                        [$loai],
-                    );
+                    // Prefer indexed FK join; text match only when *_id is still null.
+                    $join->on("admin_area.id", '=', "doanh_nghieps.{$idColumn}")
+                        ->where('admin_area.loai', '=', $loai);
                 } else {
                     $join->whereRaw(
                         "admin_area.loai = ?
@@ -261,7 +252,47 @@ class DashboardService
             ->groupBy('admin_area.id', 'admin_area.ten')
             ->get();
 
-        return $this->formatUnifiedAreaStats($rows, $dimension['table'], $dimension['loai']);
+        $stats = $this->formatUnifiedAreaStats($rows, $dimension['table'], $dimension['loai']);
+
+        // Backfill rows still missing *_id via text match (secondary, smaller set).
+        if ($idColumn !== null) {
+            $unlinked = DoanhNghiepScopeHelper::query($user)
+                ->whereNull("doanh_nghieps.{$idColumn}")
+                ->leftJoin("{$dimension['table']} as admin_area", function ($join) use ($dimension, $textColumn) {
+                    $join->whereRaw(
+                        "admin_area.loai = ?
+                        AND NULLIF(TRIM(COALESCE(doanh_nghieps.{$textColumn}, '')), '') IS NOT NULL
+                        AND LOWER(TRIM(admin_area.ten)) = LOWER(TRIM(doanh_nghieps.{$textColumn}))",
+                        [$dimension['loai']],
+                    );
+                })
+                ->leftJoin(
+                    'company_tax_managements as company_tax',
+                    'company_tax.doanh_nghiep_id',
+                    '=',
+                    'doanh_nghieps.id',
+                )
+                ->selectRaw('admin_area.id as area_code, admin_area.ten as area_name')
+                ->selectRaw('COUNT(DISTINCT doanh_nghieps.id) as total')
+                ->selectRaw(
+                    'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = true THEN doanh_nghieps.id END) as da_dinh_danh',
+                )
+                ->selectRaw(
+                    'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NOT NULL THEN doanh_nghieps.id END) as can_ra_soat',
+                )
+                ->selectRaw(
+                    'COUNT(DISTINCT CASE WHEN doanh_nghieps.da_cap_nhat_dinh_danh = false AND company_tax.id IS NULL THEN doanh_nghieps.id END) as chua_dinh_danh',
+                )
+                ->groupBy('admin_area.id', 'admin_area.ten')
+                ->get();
+
+            $stats = $this->mergeAreaStats(
+                $stats,
+                $this->formatUnifiedAreaStats($unlinked, $dimension['table'], $dimension['loai']),
+            );
+        }
+
+        return $stats;
     }
 
     /**
@@ -401,6 +432,35 @@ class DashboardService
         }
 
         return $catalogRows->values()->all();
+    }
+
+    /**
+     * Merge two area-stat arrays by areaCode (sums metrics).
+     *
+     * @param  array<int, array<string, mixed>>  $primary
+     * @param  array<int, array<string, mixed>>  $secondary
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergeAreaStats(array $primary, array $secondary): array
+    {
+        $byCode = [];
+        foreach ([$primary, $secondary] as $list) {
+            foreach ($list as $row) {
+                $key = $row['areaCode'] === null ? '__unlinked__' : (string) $row['areaCode'];
+                if (! isset($byCode[$key])) {
+                    $byCode[$key] = $row;
+
+                    continue;
+                }
+
+                $byCode[$key]['total'] += (int) $row['total'];
+                $byCode[$key]['daDinhDanh'] += (int) $row['daDinhDanh'];
+                $byCode[$key]['canRaSoat'] += (int) $row['canRaSoat'];
+                $byCode[$key]['chuaDinhDanh'] += (int) $row['chuaDinhDanh'];
+            }
+        }
+
+        return array_values($byCode);
     }
 
     private function buildCooperativeAreaQuery(?User $user)

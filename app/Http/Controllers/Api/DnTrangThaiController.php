@@ -13,6 +13,7 @@ class DnTrangThaiController extends ApiController
     public function index(): JsonResponse
     {
         $statuses = DnTrangThai::query()
+            ->select(['id', 'ma', 'ten', 'loai', 'is_active', 'hien_thi_bao_cao', 'thu_tu_bao_cao', 'created_at', 'updated_at'])
             ->withCount('doanhNghieps')
             ->when(request('loai'), fn ($q, $loai) => $q->where('loai', $loai))
             ->when(request()->has('isActive'), function ($q) {

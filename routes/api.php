@@ -220,6 +220,7 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('hop-tac-xa', HopTacXaController::class);
 
     Route::get('/tax-units', [TaxUnitController::class, 'index']);
+    Route::get('/tax-units/options', [TaxUnitController::class, 'options']);
     Route::get('/tax-units/import-column-map', [TaxUnitController::class, 'importColumnMap']);
     Route::get('/tax-management/companies', [TaxManagementController::class, 'companyList']);
     Route::get('/tax-management/import-jobs', [TaxManagementController::class, 'importJobs']);

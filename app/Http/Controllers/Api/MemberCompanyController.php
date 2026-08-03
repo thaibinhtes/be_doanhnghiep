@@ -26,7 +26,10 @@ class MemberCompanyController extends ApiController
         $user = request()->user();
 
         $query = MemberCompany::query()
-            ->with(['member', 'doanhNghiep'])
+            ->with([
+                'member:id,full_name',
+                'doanhNghiep:id,ma_so_doanh_nghiep,ten_doanh_nghiep,don_vi_id',
+            ])
             ->whereHas('doanhNghiep', fn ($q) => DoanhNghiepScopeHelper::applyScope($q, $user))
             ->when(request('memberId'), function ($query, $memberId) {
                 $query->where('member_id', $memberId);
@@ -42,6 +45,7 @@ class MemberCompanyController extends ApiController
             ->orderBy('created_at', 'desc');
 
         $perPage = request('perPage', 15);
+        $perPage = min(max((int) $perPage, 1), 100);
         $memberCompanies = $query->paginate($perPage);
 
         return MemberCompanyResource::collection($memberCompanies);

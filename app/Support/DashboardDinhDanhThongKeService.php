@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\DnDinhDanhLichSu;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class DashboardDinhDanhThongKeService
@@ -19,58 +20,44 @@ class DashboardDinhDanhThongKeService
         $monthStart = $this->resolveMonthStart($month);
         $monthEnd = $monthStart->copy()->endOfMonth();
 
-        $logs = DnDinhDanhLichSu::query()
-            ->select(['gia_tri_moi', 'created_at'])
+        $scopedCompanyIds = DoanhNghiepScopeHelper::query($user)->select('doanh_nghieps.id');
+
+        $aggregated = DnDinhDanhLichSu::query()
+            ->selectRaw('DATE(created_at) as log_date')
+            ->selectRaw('SUM(CASE WHEN gia_tri_moi = 1 THEN 1 ELSE 0 END) as da_dinh_danh')
+            ->selectRaw('SUM(CASE WHEN gia_tri_moi = 0 OR gia_tri_moi IS NULL THEN 1 ELSE 0 END) as chua_dinh_danh')
             ->whereBetween('created_at', [
                 $monthStart->copy()->startOfDay(),
                 $monthEnd->copy()->endOfDay(),
             ])
-            ->whereHas('doanhNghiep', function ($query) use ($user) {
-                DoanhNghiepScopeHelper::applyScope($query, $user);
-            })
-            ->get();
-
-        $countsByDate = [];
-        for ($day = $monthStart->copy(); $day->lte($monthEnd); $day->addDay()) {
-            $countsByDate[$day->toDateString()] = [
-                'daDinhDanh' => 0,
-                'chuaDinhDanh' => 0,
-            ];
-        }
-
-        foreach ($logs as $log) {
-            $dateKey = $log->created_at?->toDateString();
-
-            if ($dateKey === null || !isset($countsByDate[$dateKey])) {
-                continue;
-            }
-
-            if ($log->gia_tri_moi) {
-                $countsByDate[$dateKey]['daDinhDanh']++;
-            } else {
-                $countsByDate[$dateKey]['chuaDinhDanh']++;
-            }
-        }
+            ->whereIn('doanh_nghiep_id', $scopedCompanyIds)
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->get()
+            ->keyBy(fn ($row) => (string) $row->log_date);
 
         $days = [];
         $totalDaDinhDanh = 0;
         $totalChuaDinhDanh = 0;
 
-        foreach ($countsByDate as $date => $counts) {
-            $totalDaDinhDanh += $counts['daDinhDanh'];
-            $totalChuaDinhDanh += $counts['chuaDinhDanh'];
+        for ($day = $monthStart->copy(); $day->lte($monthEnd); $day->addDay()) {
+            $dateKey = $day->toDateString();
+            $row = $aggregated->get($dateKey);
+            $da = (int) ($row->da_dinh_danh ?? 0);
+            $chua = (int) ($row->chua_dinh_danh ?? 0);
+            $totalDaDinhDanh += $da;
+            $totalChuaDinhDanh += $chua;
 
             $days[] = [
-                'date' => $date,
-                'label' => Carbon::parse($date)->format('d/m'),
-                'daDinhDanh' => $counts['daDinhDanh'],
-                'chuaDinhDanh' => $counts['chuaDinhDanh'],
+                'date' => $dateKey,
+                'label' => $day->format('d/m'),
+                'daDinhDanh' => $da,
+                'chuaDinhDanh' => $chua,
             ];
         }
 
         return [
             'month' => $monthStart->format('Y-m'),
-            'monthLabel' => 'Tháng ' . $monthStart->format('n/Y'),
+            'monthLabel' => 'Tháng '.$monthStart->format('n/Y'),
             'from' => $monthStart->toDateString(),
             'to' => $monthEnd->toDateString(),
             'totals' => [
