@@ -20,6 +20,8 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'role_id',
         'don_vi_id',
+        'phong_ban_id',
+        'chuc_danh',
         'is_active',
     ];
 
@@ -45,6 +47,11 @@ class User extends Authenticatable implements JWTSubject
     public function donVi(): BelongsTo
     {
         return $this->belongsTo(DonVi::class, 'don_vi_id');
+    }
+
+    public function phongBan(): BelongsTo
+    {
+        return $this->belongsTo(PhongBan::class, 'phong_ban_id');
     }
 
     public function getJWTIdentifier(): mixed

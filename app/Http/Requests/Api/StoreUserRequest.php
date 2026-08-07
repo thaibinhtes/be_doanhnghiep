@@ -20,6 +20,8 @@ class StoreUserRequest extends FormRequest
             'password' => ['required', 'string', 'min:6'],
             'roleId' => ['nullable', 'integer', 'exists:roles,id'],
             'donViId' => ['nullable', 'integer', 'exists:don_vis,id'],
+            'phongBanId' => ['nullable', 'integer', 'exists:phong_bans,id'],
+            'chucDanh' => ['nullable', 'string', 'max:255'],
             'isActive' => ['nullable', 'boolean'],
         ];
     }

@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\PhongBanController;
 use App\Http\Controllers\Api\TinhThanhController;
 use App\Http\Controllers\Api\TaxImportJobController;
 use App\Http\Controllers\Api\TaxManagementController;
@@ -59,6 +60,7 @@ Route::middleware('auth:api')->group(function () {
 
     Route::middleware('permission:feature.users.manage')->group(function () {
         Route::get('/users/assignable-roles', [UserController::class, 'assignableRoles']);
+        Route::get('/phong-bans/options', [PhongBanController::class, 'options']);
         Route::apiResource('users', UserController::class);
     });
 

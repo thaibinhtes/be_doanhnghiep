@@ -126,10 +126,11 @@ class AuthController extends ApiController
 
         return AuthProfileCache::rememberMe((int) $user->id, $fingerprint, function () use ($user) {
             $fresh = User::query()
-                ->select(['id', 'name', 'email', 'is_active', 'role_id', 'don_vi_id', 'created_at', 'updated_at'])
+                ->select(['id', 'name', 'email', 'is_active', 'role_id', 'don_vi_id', 'phong_ban_id', 'chuc_danh', 'created_at', 'updated_at'])
                 ->with([
                     'role:id,name,slug,level,description',
                     'donVi:id,parent_id,cap,ma,ten,is_active',
+                    'phongBan:id,ma,ten',
                 ])
                 ->findOrFail($user->id);
 

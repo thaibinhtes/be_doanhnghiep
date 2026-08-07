@@ -19,7 +19,7 @@ class UserController extends ApiController
     public function index(Request $request): JsonResponse
     {
         $query = UserScopeHelper::query($request->user())
-            ->with(['role', 'donVi'])
+            ->with(['role', 'donVi', 'phongBan'])
             ->orderBy('name');
 
         if ($request->filled('search')) {
@@ -95,10 +95,14 @@ class UserController extends ApiController
             'password' => $payload['password'],
             'role_id' => $role?->id,
             'don_vi_id' => $donViId,
+            'phong_ban_id' => $payload['phongBanId'] ?? null,
+            'chuc_danh' => array_key_exists('chucDanh', $payload)
+                ? (trim((string) $payload['chucDanh']) ?: null)
+                : null,
             'is_active' => $payload['isActive'] ?? true,
         ]);
 
-        $user->load(['role', 'donVi']);
+        $user->load(['role', 'donVi', 'phongBan']);
 
         return $this->success(new UserResource($user), 'Tạo người dùng thành công', 201);
     }
@@ -109,7 +113,7 @@ class UserController extends ApiController
             return $this->error('Không có quyền xem người dùng này.', 403);
         }
 
-        $user->load(['role.permissions', 'donVi']);
+        $user->load(['role.permissions', 'donVi', 'phongBan']);
 
         return $this->success(new UserResource($user));
     }
@@ -155,12 +159,19 @@ class UserController extends ApiController
         if (array_key_exists('isActive', $payload)) {
             $data['is_active'] = (bool) $payload['isActive'];
         }
+        if (array_key_exists('phongBanId', $payload)) {
+            $data['phong_ban_id'] = $payload['phongBanId'];
+        }
+        if (array_key_exists('chucDanh', $payload)) {
+            $trimmed = trim((string) ($payload['chucDanh'] ?? ''));
+            $data['chuc_danh'] = $trimmed !== '' ? $trimmed : null;
+        }
 
         $user->update($data);
         AuthProfileCache::forgetUser((int) $user->id);
-        $user->load(['role', 'donVi']);
+        $user->load(['role', 'donVi', 'phongBan']);
 
-        return $this->success(new UserResource($user->fresh(['role', 'donVi'])), 'Cập nhật người dùng thành công');
+        return $this->success(new UserResource($user->fresh(['role', 'donVi', 'phongBan'])), 'Cập nhật người dùng thành công');
     }
 
     public function destroy(Request $request, User $user): JsonResponse
